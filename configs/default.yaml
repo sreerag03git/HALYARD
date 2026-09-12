@@ -1,0 +1,75 @@
+# HALYARD default case — a calm, grid-code-compliant, low-inertia scenario in which the
+# control-driven hang-off fatigue effect IS present (Phase-1 passes) and a gentler recovery
+# reduces it (the sweet-spot branch). All Phase-1 thresholds are committed here.
+name: default
+description: >
+  Low-inertia (H=2.5 s) 50 Hz grid, calm sea (Hs 0.75 m), moderate loss-of-infeed with a
+  strong-but-compliant support response. Phase-1 passes; gentler recovery reduces hang-off
+  fatigue at a small AEP cost. Turbine IEA-15-240-RWT, platform VolturnUS-S (frozen refs).
+
+grid:
+  H_sys_s: 2.5          # low-inertia
+  D_load: 1.0
+  R_sys: 0.05
+  T_gov_s: 8.0
+  reserve_pu: 0.12
+  T_rocof_s: 0.5
+  S_base_MW: 3000.0
+
+support:
+  H_wt_s: 10.0          # emulated synthetic inertia (control gain)
+  R_droop: 0.05
+  deadband_hz: 0.015
+  dP_max: 0.18          # converter short-term overload headroom
+  rate_pu_s: 0.50
+  tau_s: 0.20
+
+recovery:
+  kind: shaped
+  tau_rec_s: 12.0
+  rate_rec_pu_s: 0.02
+  Kp_rec: 0.6
+  dP_dip_max: 0.12
+  shape_exponent: 1.0
+
+schedule:
+  t_event_s: 100.0
+  support_window_s: 20.0
+
+sim:
+  wind_ms: 9.0          # below rated (blade pitch = 0), rotor has KE + aero headroom
+  Hs_m: 0.75            # calm, frequent sea state
+  Tp_s: 8.0
+  wave_seed: 1234
+  t_end_s: 500.0
+  dt_s: 0.02
+  t_discard_s: 100.0
+  p_load_pu: 0.10       # loss of infeed (system pu)
+  wind_capacity_MW: 900.0   # supporting fleet (participation 0.30)
+  beta_deg: 0.0
+
+cable:
+  daf: 1.2              # dynamic amplification factor on the fluctuating stress
+  hangoff_stick: true   # stick-regime bending lever at the high-tension hang-off
+
+fatigue:
+  sn_curve:
+    m1: 3.0
+    log_a1: 11.764      # DNV-RP-C203-style, MPa units
+    m2: 5.0
+    log_a2: 15.606
+    N_knee: 1.0e6
+    sigma_u_MPa: 1400.0
+  mean_stress: goodman
+  DFF: 3.0
+
+annualization:
+  events_per_year: 500.0        # significant frequency events supported per year
+  sea_state_occurrence: 0.15    # fraction of the year in this sea-state bin
+
+# PRE-REGISTERED Phase-1 gate thresholds (committed before results are seen, §6).
+phase1_thresholds:
+  added_damage_frac_min: 0.05   # X: control must add > 5% of hang-off Miner damage
+  recovery_share_min: 0.20      # Y: recovery must hold > 20% of the slow-drift excursion
+  min_slow_stress_amp_MPa: 0.5  # fatigue-relevant amplitude floor
+  slow_cutoff_hz: 0.03

@@ -1,0 +1,68 @@
+# HALYARD low-inertia severe case — a weak island grid with a large loss of infeed and
+# aggressive support. The control-driven effect is large, and the recovery shape strongly
+# affects BOTH the secondary frequency dip and the hang-off fatigue: a ~20 s recovery
+# transient approaches the platform's ~28 s pitch resonance, so here the fatigue-vs-recovery
+# relationship is non-monotonic (the resonant-penalty branch). Use this to explore how the
+# sweep discovers the fatigue-optimal recovery rather than assuming "gentle = better".
+name: low_inertia_severe
+description: >
+  Weak island grid (H=2.0 s), large loss of infeed, aggressive support (dP_max 0.20). Strong
+  effect; recovery shape interacts with the platform pitch resonance. Check grid-code
+  compliance of the secondary dip in the comparison tab.
+
+grid:
+  H_sys_s: 2.0
+  D_load: 1.0
+  R_sys: 0.05
+  T_gov_s: 8.0
+  reserve_pu: 0.12
+  T_rocof_s: 0.5
+  S_base_MW: 1500.0     # small island
+
+support:
+  H_wt_s: 10.0
+  R_droop: 0.04
+  deadband_hz: 0.015
+  dP_max: 0.20
+  rate_pu_s: 0.50
+  tau_s: 0.20
+
+recovery:
+  kind: shaped
+  tau_rec_s: 12.0
+  rate_rec_pu_s: 0.02
+
+schedule:
+  t_event_s: 100.0
+  support_window_s: 25.0
+
+sim:
+  wind_ms: 9.0
+  Hs_m: 1.0
+  Tp_s: 8.0
+  wave_seed: 1234
+  t_end_s: 500.0
+  dt_s: 0.02
+  t_discard_s: 100.0
+  p_load_pu: 0.13
+  wind_capacity_MW: 450.0    # participation 0.30 on the smaller base
+  beta_deg: 0.0
+
+cable:
+  daf: 1.2
+  hangoff_stick: true
+
+fatigue:
+  sn_curve: {m1: 3.0, log_a1: 11.764, m2: 5.0, log_a2: 15.606, N_knee: 1.0e6, sigma_u_MPa: 1400.0}
+  mean_stress: goodman
+  DFF: 5.0             # harsher DFF for an inaccessible critical component
+
+annualization:
+  events_per_year: 800.0
+  sea_state_occurrence: 0.20
+
+phase1_thresholds:
+  added_damage_frac_min: 0.05
+  recovery_share_min: 0.20
+  min_slow_stress_amp_MPa: 0.5
+  slow_cutoff_hz: 0.03
