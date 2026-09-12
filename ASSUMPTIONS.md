@@ -86,22 +86,72 @@ fairlead depth. The fit is surfaced in the app's **Validation** tab (§10).
 
 ## 3. Dynamic cable — representative lazy-wave lay (`models/dynamic_cable.py`)
 
-*(To be finalized in the cable module; every geometric and material number will be
-listed here with DNV-RP-F401 / DNVGL-RP-0360 rationale and flagged **[representative]**.)*
+All values **[representative]**, internally consistent with a 66 kV three-core dynamic
+cable and laid out to DNV-RP-F401 / DNVGL-RP-0360 lazy-wave geometry rules. The solved
+static shape (verified) is a proper lazy wave: hang-off at −8 m, upper sag bend, a
+buoyancy hog crest at ≈ −87 m, touchdown at ≈ 134 m horizontal, then seabed to the anchor.
+
+| Quantity | Value | Basis |
+|---|---|---|
+| Water depth | 200 m | matches VolturnUS-S site |
+| Outer diameter | 0.20 m | typical 66 kV 3-core dynamic |
+| Dry mass / length | 45 kg/m | → submerged weight ≈ 125 N/m |
+| Axial stiffness EA | 400 MN | typical dynamic-cable value |
+| Bending stiffness EI | 25 kN·m² | flexible dynamic cable |
+| Operational MBR | 3.5 m | curvature limit 0.286 1/m |
+| Total suspended length | 320 m | gives lazy-wave slack |
+| Hang-off → anchor horizontal | 180 m | design layout |
+| Buoyancy section | 42–62 % of length | creates the hog |
+| Buoyancy net uplift | 1.6 × bare submerged wt | gentle hog, no surface breach |
+
+**Equivalent-stress model [representative]** — `σ = E_steel·r_bend·κ + T/A_armour`:
+- Default **slip regime** for the general cable (r_bend = wire radius 2.5 mm), consistent
+  with the low EI (armour slips); gives physically bounded stresses.
+- **Hang-off stick regime** (r_bend = armour pitch radius 90 mm) is the DEFAULT AT THE
+  HANG-OFF, where high tension causes stick — the physical reason hang-offs are
+  fatigue-critical. Toggleable to slip for a sensitivity lower bound. See EXTENSIONS.md.
+- Solve method: near-inextensible Position-Based Dynamics; tension from force balance.
+- Dynamic response: quasi-static family (re-solve vs hang-off offset) + DAF (default 1.2),
+  with the hang-off bend-stiffener curvature driven by platform pitch (stiffener length 4 m).
 
 ---
 
 ## 4. Grid & metocean
 
-*(Swing-equation inertia constants, load-damping, and JONSWAP sea-state bins will be
-listed here as their modules are built; the bundled default frequency trace and its
-provenance will be recorded.)*
+**Swing-equation SFR grid (`physics/grid.py`)** — all defaults **[representative]** of a
+low-inertia system; the effect scales with grid weakness so this is the relevant regime:
+
+| Quantity | Value | Basis |
+|---|---|---|
+| Nominal frequency | 50 Hz | GB / ENTSO-E CE jurisdiction |
+| System inertia H_sys | 2.5 s (low-inertia default; 1.5–6 range) | [representative] |
+| Load damping D | 1.0 pu/pu (~2 %/Hz) | [representative] |
+| Rest-of-system droop R_sys | 0.05 | [representative] primary response |
+| Primary-response lag T_gov | 8 s | [representative] aggregate governor+prime-mover |
+| Spinning reserve | 0.12 pu | [representative] |
+| RoCoF measurement filter | 0.5 s | [representative] PLL/measurement lag |
+| System base | 3000 MW | [representative] island/region |
+| Supporting wind capacity | 900 MW (participation 0.30) | [representative] wind-rich low-inertia grid |
+
+**Controller** — support: synthetic inertia H_wt (control gain, default 6 s), droop
+R = 0.05, deadband 15 mHz, magnitude clip 0.10 pu, rate limit, reservoir-guarded at ω_min.
+Recovery lever: τ_rec, rate_rec, shape exponent (§5.3). Incumbent baseline recovery is a
+fast first-order return (τ ≈ 2 s) representative of published FFR schemes — **not** a
+strawman. Metocean JONSWAP bins to be listed with the sea-state module.
 
 ---
 
-## 5. Fatigue S-N / T-N curve
+## 5. Fatigue S-N / T-N curve (`physics/fatigue.py`)
 
-*(S-N slope m, log C, knee, σ_u and the curve's source — DNV-RP-C203 seawater-with-CP
-class, representative of the armour-wire steel — will be listed here when the fatigue
-module is built, with the simplified equivalent-stress assumption for helical armour
-flagged **[representative]**.)*
+| Quantity | Value | Basis |
+|---|---|---|
+| S-N form | bilinear, MPa-based | DNV-RP-C203-style steel curve **[representative]** of armour-wire steel in seawater with cathodic protection |
+| m₁, log a₁ (N < 10⁶) | 3.0, 11.764 | DNV-RP-C203 D-curve-style |
+| m₂, log a₂ (N > 10⁶) | 5.0, 15.606 | second slope past the knee |
+| UTS σ_u (mean-stress) | 1400 MPa | armour-wire steel [representative] |
+| Mean-stress correction | Goodman (default) / Gerber (toggle) | §5.7 |
+| Design Fatigue Factor | 3 (range 3–10 for critical/inaccessible) | DNV §5.8 |
+
+Fatigue is counted on the **combined** stress signal (never wave-only + control-only), so
+the mean-stress shift from the slow control drift is captured (R-ratio effect). The
+helical-armour equivalent-stress simplification is flagged in §3.
