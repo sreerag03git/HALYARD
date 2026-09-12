@@ -1,0 +1,9 @@
+# HALYARD live-engine dependencies (pure pip, Streamlit Community Cloud compatible)
+# Pinned for reproducibility. No compiled OpenFAST/OrcaFlex — high-fidelity data is ingested as files.
+numpy==2.1.3
+scipy==1.14.1
+pandas==2.2.3
+plotly==5.24.1
+streamlit==1.39.0
+rainflow==3.2.0
+PyYAML==6.0.2

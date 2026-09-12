@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env/
+.env
+.DS_Store
+.idea/
+.vscode/
+*.log
+.ipynb_checkpoints/
+# Cached run artifacts (regenerated deterministically from seeds)
+.halyard_cache/

@@ -1,0 +1,17 @@
+# HALYARD theme — light, premium, restrained. See §8 of the specification.
+# Near-paper off-white ground, near-black ink, one muted steel/slate-blue accent.
+[theme]
+base = "light"
+primaryColor = "#3A5A78"          # muted steel/slate blue — primary actions & key data lines
+backgroundColor = "#FAFAF8"       # near-paper off-white
+secondaryBackgroundColor = "#FFFFFF"  # white surfaces
+textColor = "#1A1A1A"             # near-black ink
+font = "sans serif"
+
+[server]
+# Keep memory footprint modest on Community Cloud (~1 GB).
+maxUploadSize = 50
+enableStaticServing = true
+
+[browser]
+gatherUsageStats = false
