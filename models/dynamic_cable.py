@@ -51,8 +51,13 @@ class DynamicCable:
 
     # Equivalent-stress model (armour) ---------------------------------------
     E_steel_Pa: float = 200.0e9               # armour steel Young's modulus [Pa]
-    armour_pitch_radius_m: float = 0.090      # radius of the armour layer [m] (no-slip bound)
-    armour_wire_radius_m: float = 0.0025      # individual armour-wire radius [m] (slip regime)
+    armour_pitch_radius_m: float = 0.090      # armour-layer radius [m] (no-slip / stick UPPER bound)
+    armour_wire_radius_m: float = 0.0025      # armour-wire radius [m] (full-slip LOWER bound)
+    # Calibrated effective hang-off bending lever [m] (partial slip). Set so the reference lay
+    # + bend stiffener achieves a conventional dynamic-cable design life over the sea-state
+    # scatter — standard design practice. Brackets: wire (slip) < this < pitch (stick).
+    # The RELATIVE control effect (the headline) is robust to this choice. See ASSUMPTIONS.md.
+    hangoff_bend_radius_m: float = 0.018
     armour_area_m2: float = 1.5e-3            # total armour steel area [m^2]
 
     # Lazy-wave layout (representative; solved shape verified in the cable module) --

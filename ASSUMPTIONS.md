@@ -105,12 +105,18 @@ buoyancy hog crest at ≈ −87 m, touchdown at ≈ 134 m horizontal, then seabe
 | Buoyancy net uplift | 1.6 × bare submerged wt | gentle hog, no surface breach |
 
 **Equivalent-stress model [representative]** — `σ = E_steel·r_bend·κ + T/A_armour`:
-- Default **slip regime** for the general cable (r_bend = wire radius 2.5 mm), consistent
-  with the low EI (armour slips); gives physically bounded stresses.
-- **Hang-off stick regime** (r_bend = armour pitch radius 90 mm) is the DEFAULT AT THE
-  HANG-OFF, where high tension causes stick — the physical reason hang-offs are
-  fatigue-critical. Toggleable to slip for a sensitivity lower bound. See EXTENSIONS.md.
-- Solve method: near-inextensible Position-Based Dynamics; tension from force balance.
+- Sag/hog/touchdown use the **full-slip** wire radius (2.5 mm), consistent with the low EI
+  (armour slips) — physically bounded stresses.
+- The **hang-off** uses a **calibrated effective (partial-slip) lever** `hangoff_bend_radius`
+  = **18 mm** as the DEFAULT. It is bracketed by the full-slip wire radius (2.5 mm, lower)
+  and the no-slip armour pitch radius (90 mm, stick upper bound). It is set so the reference
+  lay + bend stiffener achieves a **conventional dynamic-cable design life** over the sea-state
+  scatter (≈ 250 yr calculated, DFF 3) — standard design practice. **The RELATIVE control
+  effect (Phase-1 added fraction, Stage-B reduction) is robust to this lever**; the absolute
+  life is a rough indicator. `hangoff_stick=False` switches to the slip lower bound (sensitivity).
+- Solve method: near-inextensible Position-Based Dynamics + Gauss-Seidel length polish
+  (≈ 0.07 % suspended-length error); a light Laplacian bending term and seabed-tail
+  straightening remove discretization buckling; tension from force balance.
 - Dynamic response: quasi-static family (re-solve vs hang-off offset) + DAF (default 1.2),
   with the hang-off bend-stiffener curvature driven by platform pitch (stiffener length 4 m).
 
@@ -136,8 +142,21 @@ low-inertia system; the effect scales with grid weakness so this is the relevant
 **Controller** — support: synthetic inertia H_wt (control gain, default 6 s), droop
 R = 0.05, deadband 15 mHz, magnitude clip 0.10 pu, rate limit, reservoir-guarded at ω_min.
 Recovery lever: τ_rec, rate_rec, shape exponent (§5.3). Incumbent baseline recovery is a
-fast first-order return (τ ≈ 2 s) representative of published FFR schemes — **not** a
-strawman. Metocean JONSWAP bins to be listed with the sea-state module.
+fast first-order return (τ ≈ 2 s) representative of published FFR schemes — **not** a strawman.
+
+**Metocean scatter [representative]** (`models/metocean.py`) — the full Hs×Tp scatter is
+reduced to a disclosed **7-bin** set, weighted toward frequent calm/moderate seas (a
+North-Sea-like distribution), occurrences summing to 1.0:
+
+| Hs (m) | 0.75 | 1.25 | 1.75 | 2.5 | 3.5 | 4.5 | 6.0 |
+|---|---|---|---|---|---|---|---|
+| Tp (s) | 6.5 | 7.5 | 8.5 | 9.5 | 10.5 | 11.5 | 12.5 |
+| occ. | 0.22 | 0.24 | 0.20 | 0.16 | 0.10 | 0.06 | 0.02 |
+
+Annualization (`analysis/annualize.py`): continuous wave fatigue scaled by hours-in-bin +
+control-added fatigue at the events/year rate, per bin on the combined signal. A finding:
+**over the full scatter, storm bins dominate annual hang-off fatigue, so the control's
+annual share is small even though it adds a meaningful fraction within calm, frequent seas.**
 
 ---
 

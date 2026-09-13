@@ -42,6 +42,7 @@ def tab_overview(p):
         unsafe_allow_html=True)
     fam = get_family()
     shape = fam.base_shape
+    st.plotly_chart(drawings.coupling_block_diagram(), use_container_width=True)
     c1, c2 = st.columns([3, 2])
     with c1:
         st.plotly_chart(viz3d.system_figure(shape, REFERENCE_CABLE, VOLTURNUS_S,
@@ -50,7 +51,6 @@ def tab_overview(p):
         st.caption("IEA-15MW rotor + tower on the VolturnUS-S semi, catenary moorings, and the "
                    "solved lazy-wave cable (colour = geometric curvature). Rotate / zoom / pan.")
     with c2:
-        st.plotly_chart(drawings.coupling_block_diagram(), use_container_width=True)
         st.markdown("**Frozen reference values** (read-only)")
         st.dataframe(pd.DataFrame([
             ("Turbine", "IEA-15-240-RWT (Type-4)"),
@@ -62,7 +62,7 @@ def tab_overview(p):
             ("Surge / pitch period", "120 s / 28 s (fitted)"),
             ("Cable", "66 kV lazy-wave (representative)"),
         ], columns=["Quantity", "Value"]), hide_index=True, use_container_width=True)
-        st.caption(f"Aero surface: {IEA15MW.aero.provenance[:90]}…")
+        st.caption(f"Aero surface: {IEA15MW.aero.provenance[:78]}…")
 
 
 def tab_grid_control(p):
@@ -260,6 +260,29 @@ def tab_fatigue(p):
                "touchdown carry far less control-driven damage — the buoyancy section decouples "
                "them.")
 
+    st.markdown("**Annualized hang-off life across the sea-state scatter**")
+    st.markdown(what_this_shows(
+        "Extrapolates to a lifetime over a representative 7-bin JONSWAP scatter: continuous "
+        "wave fatigue by hours-in-bin, plus the control-added fatigue at the events/year rate. "
+        "Counting is per-bin on the combined signal (never summed)."), unsafe_allow_html=True)
+    if st.button("Compute annualized life across the scatter (14 cases)"):
+        st.session_state["_run_annual"] = True
+    if st.session_state.get("_run_annual"):
+        from app.runner import cached_annualize
+        with st.spinner("Running the sea-state scatter…"):
+            ar = cached_annualize(p)
+        cc = st.columns(3)
+        cc[0].metric("Hang-off life (wave + control)",
+                     "∞" if not np.isfinite(ar.life_years) else f"{ar.life_years:,.0f} yr")
+        cc[1].metric("Hang-off life (wave only)",
+                     "∞" if not np.isfinite(ar.life_years_wave_only) else
+                     f"{ar.life_years_wave_only:,.0f} yr")
+        share = 100 * ar.event_annual_damage / ar.total_annual_damage if ar.total_annual_damage else 0
+        cc[2].metric("Control share of annual damage", f"{share:.1f}%")
+        rows = [dict(Hs=b.sea.Hs_m, Tp=b.sea.Tp_s, occ=b.sea.occurrence,
+                     D_wave=b.D_wave, D_support=b.D_support, added=b.added) for b in ar.bins]
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
 
 def tab_ingest(p):
     st.markdown("### High-fidelity ingest (engine B)")
@@ -327,5 +350,11 @@ def tab_validation(p):
         ("MBR respected", cv["mbr_ok"]),
         ("Catenary κ numeric / analytic", round(cb["ratio"], 3) if cb["ratio"] == cb["ratio"] else "n/a"),
     ], columns=["Check", "Value"]), hide_index=True, use_container_width=True)
+    st.markdown("**Metocean — reduced sea-state scatter (representative, disclosed)**")
+    from models.metocean import SCATTER, check_occurrence_sums_to_one
+    st.dataframe(pd.DataFrame([{"Hs (m)": s.Hs_m, "Tp (s)": s.Tp_s, "occurrence": s.occurrence}
+                               for s in SCATTER]), hide_index=True, use_container_width=True)
+    st.caption(f"Occurrences sum to {check_occurrence_sums_to_one():.2f}. The full Hs×Tp scatter "
+               "is reduced to these fatigue-relevant bins (ASSUMPTIONS.md).")
     st.caption("Sensitivity: change the S-N slope m and Goodman/Gerber in the sidebar and watch "
                "the Fatigue and Comparison tabs — the qualitative conclusion survives.")

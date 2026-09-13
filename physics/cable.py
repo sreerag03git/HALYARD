@@ -382,7 +382,9 @@ def region_stress_timeseries(family: QuasiStaticFamily, region: str,
         d_pitch = pitch - pitch.mean()                          # stiffener rotation [rad]
         kappa_stiff = (d_alpha - d_pitch) / BEND_STIFFENER_LEN_M
         kappa = kappa_geom + kappa_stiff
-        r_bend = c.armour_pitch_radius_m if hangoff_stick else c.armour_wire_radius_m
+        # Default: calibrated effective (partial-slip) lever. hangoff_stick=False switches to
+        # the full-slip wire-radius lower bound (sensitivity study).
+        r_bend = c.hangoff_bend_radius_m if hangoff_stick else c.armour_wire_radius_m
     else:
         kappa = kappa_geom
         r_bend = c.armour_wire_radius_m

@@ -103,9 +103,12 @@ def psd_overlap_plot(p1):
                              line=dict(color=C_NO_SUPPORT, width=1.8)))
     fig.add_trace(go.Scatter(x=f, y=p1.psd_with_support, name="wave + frequency support",
                              line=dict(color=ACCENT, width=1.8)))
+    positions = {"surge": "top left", "pitch": "top right"}
     for name, fb in p1.modal_bands_hz.items():
         fig.add_vline(x=fb, line=dict(color=WARN, dash="dot", width=1),
-                      annotation_text=f"{name} mode", annotation_position="top")
+                      annotation_text=f"{name} mode",
+                      annotation_position=positions.get(name, "top"),
+                      annotation_font=dict(size=10, color=WARN))
     fig.update_xaxes(type="log")
     fig.update_yaxes(type="log")
     return theme.plotly_layout(fig, "Hang-off stress PSD — spectral overlap (Phase-1)",

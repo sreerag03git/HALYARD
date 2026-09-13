@@ -72,6 +72,15 @@ def cached_comparison(p: dict):
 
 
 @st.cache_data(show_spinner=False)
+def cached_annualize(p: dict):
+    from analysis.annualize import annualized_life
+    return annualized_life(make_config(p, enable_support=True, t_end=360.0),
+                           events_per_year=p["events_per_year"], family=get_family(),
+                           fatigue_params=make_fatigue(p), daf=p["daf"],
+                           hangoff_stick=p["hangoff_stick"])
+
+
+@st.cache_data(show_spinner=False)
 def cached_sweep(p: dict):
     # Stage A is an explicit offline optimiser: a compact 4x3 recovery grid at a shorter
     # duration keeps it responsive while still resolving the trade-off and Pareto front.

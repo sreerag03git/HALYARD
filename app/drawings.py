@@ -93,22 +93,25 @@ def coupling_block_diagram() -> go.Figure:
     ]
     fig = go.Figure()
     n = len(steps)
+    bw, gap = 1.3, 0.55            # box width and gap (wide boxes, room for text + arrows)
+    pitch = bw + gap
     for i, (label, color) in enumerate(steps):
-        x0 = i * 1.5
-        fig.add_shape(type="rect", x0=x0, x1=x0 + 1.15, y0=0, y1=1,
-                      line=dict(color=color, width=2), fillcolor="rgba(255,255,255,0.9)")
-        fig.add_annotation(x=x0 + 0.575, y=0.5, text=label.replace("\n", "<br>"),
-                           showarrow=False, font=dict(size=10, color=INK))
+        x0 = i * pitch
+        fig.add_shape(type="rect", x0=x0, x1=x0 + bw, y0=0, y1=1, layer="below",
+                      line=dict(color=color, width=2), fillcolor="rgba(255,255,255,0.95)")
+        fig.add_annotation(x=x0 + bw / 2, y=0.5, text=label.replace("\n", "<br>"),
+                           showarrow=False, font=dict(size=11, color=INK), align="center")
         if i < n - 1:
-            fig.add_annotation(x=x0 + 1.15, y=0.5, ax=x0 + 1.5, ay=0.5, xref="x", yref="y",
-                               axref="x", ayref="y", showarrow=True, arrowhead=2,
-                               arrowcolor=GREY, arrowwidth=1.5, text="")
-    # Recovery lever callout on the rotor->thrust link.
-    fig.add_annotation(x=3.0, y=1.35, text="recovery shape = the design lever (§5.3)",
-                       showarrow=False, font=dict(size=10, color=ACCENT))
-    fig.update_xaxes(visible=False, range=[-0.2, n * 1.5])
-    fig.update_yaxes(visible=False, range=[-0.3, 1.7])
-    fig.update_layout(height=180, margin=dict(l=0, r=0, t=10, b=0),
+            fig.add_annotation(x=x0 + bw + gap * 0.9, y=0.5, ax=x0 + bw + gap * 0.1, ay=0.5,
+                               xref="x", yref="y", axref="x", ayref="y", showarrow=True,
+                               arrowhead=2, arrowcolor=GREY, arrowwidth=1.6, text="")
+    # Recovery-lever callout spanning the rotor -> thrust -> platform links.
+    fig.add_annotation(x=3.5 * pitch - gap, y=1.35,
+                       text="recovery shape = the only design lever (§5.3)",
+                       showarrow=False, font=dict(size=11, color=ACCENT))
+    fig.update_xaxes(visible=False, range=[-0.3, n * pitch - gap + 0.3])
+    fig.update_yaxes(visible=False, range=[-0.25, 1.7])
+    fig.update_layout(height=170, margin=dict(l=0, r=0, t=8, b=0),
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       showlegend=False)
     return fig
