@@ -84,11 +84,13 @@ def case_from_dict(d: dict) -> Case:
         slow_cutoff_hz=th.get("slow_cutoff_hz", 0.03))
     ft = d.get("fatigue", {})
     sn = ft.get("sn_curve", {})
+    # float() coercion guards against PyYAML parsing e.g. "1.0e6" as a string.
     fatigue = FatigueParams(
-        sn=SNCurve(m1=sn.get("m1", 3.0), log_a1=sn.get("log_a1", 11.764),
-                   m2=sn.get("m2", 5.0), log_a2=sn.get("log_a2", 15.606),
-                   N_knee=sn.get("N_knee", 1e6), sigma_u_MPa=sn.get("sigma_u_MPa", 1400.0)),
-        mean_stress=ft.get("mean_stress", "goodman"), DFF=ft.get("DFF", 3.0))
+        sn=SNCurve(m1=float(sn.get("m1", 3.0)), log_a1=float(sn.get("log_a1", 11.764)),
+                   m2=float(sn.get("m2", 5.0)), log_a2=float(sn.get("log_a2", 15.606)),
+                   N_knee=float(sn.get("N_knee", 1e6)),
+                   sigma_u_MPa=float(sn.get("sigma_u_MPa", 1400.0))),
+        mean_stress=ft.get("mean_stress", "goodman"), DFF=float(ft.get("DFF", 3.0)))
     return Case(
         name=d.get("name", "case"), description=d.get("description", ""),
         sim=sim, thresholds=thresholds, fatigue=fatigue,

@@ -57,8 +57,9 @@ class StaticShape:
 
 def solve_static_shape(cable: DynamicCable, x_top: float | None = None,
                        z_top: float | None = None, anchor_x: float | None = None,
-                       n_nodes: int = 80, max_iter: int = 6000,
-                       constraint_sweeps: int = 8,
+                       anchor_z: float | None = None, n_nodes: int = 80,
+                       max_iter: int = 8000, constraint_sweeps: int = 20,
+                       smooth_w: float = 0.06,
                        r_init: np.ndarray | None = None) -> StaticShape:
     """Solve the lazy-wave static shape by Position-Based Dynamics (inextensible cable).
 
@@ -89,7 +90,7 @@ def solve_static_shape(cable: DynamicCable, x_top: float | None = None,
     # hang-off geometry and drives the fatigue.
     if anchor_x is None:
         anchor_x = cable.hangoff_x_m + cable.horizontal_layout_m
-    anchor = np.array([anchor_x, -depth])
+    anchor = np.array([anchor_x, -depth if anchor_z is None else anchor_z])
     top = np.array([x_top, z_top])
 
     # Inverse mass: fixed ends immovable (w=0).
@@ -126,7 +127,17 @@ def solve_static_shape(cable: DynamicCable, x_top: float | None = None,
         nxt[-1] = anchor
         r_prev = r
         r = nxt
-        # Distance-constraint projection (Jacobi sweeps).
+        # Light bending resistance (EI > 0): Laplacian smoothing of free interior nodes,
+        # which suppresses the spurious zig-zag buckling of the slack seabed-laid portion
+        # and gently rounds the touchdown, as bending stiffness physically does. Applied
+        # BEFORE the length constraint so the constraint projection has the last word on
+        # segment length (conserves total length).
+        if smooth_w > 0:
+            lap = 0.5 * (r[:-2] + r[2:]) - r[1:-1]
+            r[1:-1] = r[1:-1] + smooth_w * lap
+            r[0] = top
+            r[-1] = anchor
+        # Distance-constraint projection (Jacobi sweeps) — enforces inextensibility.
         for _ in range(constraint_sweeps):
             d = r[seg_j] - r[seg_i]
             length = np.sqrt((d ** 2).sum(axis=1)) + 1e-12
@@ -137,8 +148,10 @@ def solve_static_shape(cable: DynamicCable, x_top: float | None = None,
             r = r + delta
             r[0] = top
             r[-1] = anchor
-        # Seabed contact.
+        # Seabed contact (vertical clamp only; the bending smoothing keeps the laid tail
+        # straight without a monotonic-x hack that would force-stretch the slack).
         np.maximum(r[:, 1], -depth, out=r[:, 1])
+        r[-1] = anchor
         if it % 50 == 0:
             move = float(np.max(np.abs(r - r_prev)))
             if it > 100 and move < 1e-5:
@@ -147,14 +160,67 @@ def solve_static_shape(cable: DynamicCable, x_top: float | None = None,
                 break
             residual = move
 
+    # Length-restoration polish: forward-backward Gauss-Seidel distance projection
+    # (Jakobsen's rope method). Using updated positions within a sweep propagates the
+    # correction along the chain in O(N) rather than Jacobi's O(N^2), so it converges the
+    # inextensibility tightly in a few hundred sweeps (early stop on the worst segment).
+    r = _gauss_seidel_length(r, L0, w, top, anchor, depth, max_sweeps=600, tol=1e-3)
+
+    # Straighten the seabed-laid tail: physically the slack cable lies straight on the flat
+    # seabed from the touchdown to the anchor. The discrete solver otherwise folds the excess
+    # back on itself (a spurious kink); replacing the tail with a straight lay removes it and
+    # gives the correct zero curvature there. The suspended part (which carries the fatigue)
+    # is untouched.
+    b_end = int(np.searchsorted(s, cable.buoyancy_end_frac * L))
+    near_bed = np.where((np.arange(N + 1) > b_end) & (r[:, 1] < -depth + 2.0))[0]
+    if len(near_bed):
+        td_bed = int(near_bed[0])
+        if N - td_bed >= 1:
+            r[td_bed:] = np.linspace(r[td_bed], anchor, N - td_bed + 1)
+            r[td_bed:, 1] = -depth
+            r[td_bed, 1] = r[td_bed, 1]   # touchdown node sits on the seabed
+
     touchdown_idx = _touchdown_index(r, depth)
     tension = _tension_from_geometry(r, node_wt, touchdown_idx)
     curvature = _curvature_from_shape(r, s)
+    # Beyond touchdown the cable lies flat on the seabed (curvature ~ 0); zero any
+    # discretization residual there so the MBR/curvature reflect the suspended cable.
+    curvature[touchdown_idx + 1:] = 0.0
     dep_angle = _departure_angle_deg(r)
     return StaticShape(x=r[:, 0], z=r[:, 1], s=s, tension_N=tension,
                        curvature=curvature, departure_angle_deg=dep_angle,
                        top_tension_N=float(tension[0]), touchdown_idx=touchdown_idx,
                        converged=converged, residual=residual)
+
+
+def _gauss_seidel_length(r: np.ndarray, L0: float, w: np.ndarray, top, anchor,
+                         depth: float, max_sweeps: int = 600, tol: float = 1e-3) -> np.ndarray:
+    """Forward-backward Gauss-Seidel projection of segment lengths to L0 (fixed ends)."""
+    N = len(r) - 1
+    for _ in range(max_sweeps):
+        for i in range(N):                      # forward sweep
+            d = r[i + 1] - r[i]
+            l = np.hypot(d[0], d[1]) + 1e-12
+            diff = (l - L0) / l
+            si = w[i] + w[i + 1]
+            if si > 0:
+                r[i] = r[i] + (w[i] / si) * diff * d
+                r[i + 1] = r[i + 1] - (w[i + 1] / si) * diff * d
+        for i in range(N - 1, -1, -1):          # backward sweep
+            d = r[i + 1] - r[i]
+            l = np.hypot(d[0], d[1]) + 1e-12
+            diff = (l - L0) / l
+            si = w[i] + w[i + 1]
+            if si > 0:
+                r[i] = r[i] + (w[i] / si) * diff * d
+                r[i + 1] = r[i + 1] - (w[i + 1] / si) * diff * d
+        r[0] = top
+        r[-1] = anchor
+        np.maximum(r[:, 1], -depth, out=r[:, 1])
+        seg = np.sqrt((np.diff(r, axis=0) ** 2).sum(axis=1))
+        if np.max(np.abs(seg - L0)) / L0 < tol:
+            break
+    return r
 
 
 def _tension_from_geometry(r: np.ndarray, node_wt: np.ndarray, td_idx: int) -> np.ndarray:

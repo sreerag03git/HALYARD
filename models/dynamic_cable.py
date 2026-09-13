@@ -58,8 +58,8 @@ class DynamicCable:
     # Lazy-wave layout (representative; solved shape verified in the cable module) --
     hangoff_x_m: float = 0.0                  # hang-off horizontal position [m]
     hangoff_z_m: float = -8.0                 # hang-off depth below MSL [m]
-    total_length_m: float = 320.0             # total suspended cable length [m]
-    horizontal_layout_m: float = 180.0        # nominal hang-off -> touchdown horizontal [m]
+    total_length_m: float = 310.0             # total cable length [m] (tuned: clean lazy wave)
+    horizontal_layout_m: float = 165.0        # hang-off -> subsea anchor horizontal [m]
     buoyancy_start_frac: float = 0.42         # buoyancy section start (fraction of length)
     buoyancy_end_frac: float = 0.62           # buoyancy section end (fraction of length)
     buoyancy_uplift_factor: float = 1.6       # net uplift as a multiple of bare submerged wt
