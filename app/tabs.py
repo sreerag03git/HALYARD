@@ -5,7 +5,9 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from app import drawings, plotting, viz3d
+from app import plotting, viz3d, viz3d_pro
+from app import (dwg_arrangement, dwg_cable, dwg_diagrams, dwg_dlc, dwg_fatigue,
+                 dwg_mooring)
 from app.runner import (cached_case, cached_comparison, cached_phase1, cached_sweep,
                         get_family, make_fatigue)
 from app.theme import fidelity_tag, what_this_shows, GOOD, WARN
@@ -42,11 +44,11 @@ def tab_overview(p):
         unsafe_allow_html=True)
     fam = get_family()
     shape = fam.base_shape
-    st.plotly_chart(drawings.coupling_block_diagram(), use_container_width=True)
+    st.plotly_chart(dwg_diagrams.coupling_block(), use_container_width=True)
     c1, c2 = st.columns([3, 2])
     with c1:
-        st.plotly_chart(viz3d.system_figure(shape, REFERENCE_CABLE, VOLTURNUS_S,
-                                            color_label="curvature (1/m)"),
+        st.plotly_chart(viz3d_pro.system_figure_pro(shape, REFERENCE_CABLE, VOLTURNUS_S,
+                                                    color_label="curvature (1/m)"),
                         use_container_width=True)
         st.caption("IEA-15MW rotor + tower on the VolturnUS-S semi, catenary moorings, and the "
                    "solved lazy-wave cable (colour = geometric curvature). Rotate / zoom / pan.")
@@ -64,8 +66,15 @@ def tab_overview(p):
         ], columns=["Quantity", "Value"]), hide_index=True, use_container_width=True)
         st.caption(f"Aero surface: {IEA15MW.aero.provenance[:78]}…")
     st.markdown("**General arrangement — dimensioned elevation** (computed geometry)")
-    st.plotly_chart(drawings.general_arrangement(shape, REFERENCE_CABLE, VOLTURNUS_S),
+    st.plotly_chart(dwg_arrangement.ga_elevation(shape, REFERENCE_CABLE, VOLTURNUS_S, IEA15MW),
                     use_container_width=True)
+    st.markdown("**General arrangement — plan** (platform, 120° mooring spread, cable route)")
+    st.plotly_chart(dwg_arrangement.plan_view(REFERENCE_CABLE, VOLTURNUS_S, IEA15MW),
+                    use_container_width=True)
+    st.markdown("**Analysis pipeline** (metocean → coupled sim → cable dynamics → fatigue → cost)")
+    st.plotly_chart(dwg_diagrams.pipeline_flow(), use_container_width=True)
+    st.caption("The Phase-1 honesty gate (diamond) gates Stage A/B: no saving is claimed unless "
+               "frequency-support control adds meaningful hang-off fatigue vs the wave-only baseline.")
 
 
 def tab_grid_control(p):
@@ -98,6 +107,11 @@ def tab_grid_control(p):
         st.plotly_chart(plotting.wind_pitch_plot(sim), use_container_width=True)
         st.caption("Turbulent inflow (if enabled) and the ROSCO-style blade-pitch response "
                    "(active above rated wind, with floating-feedback damping).")
+    st.markdown("**Aero-servo control architecture** (ROSCO-style)")
+    st.plotly_chart(dwg_diagrams.control_loop(), use_container_width=True)
+    st.caption("Closed-loop blade-pitch PI (KP=6, KI=2) with floating nacelle-velocity feedback "
+               "(KF=0.05), generator-torque control, dynamic-inflow lag (4 s), and the synthetic-"
+               "inertia + droop grid-support path injecting ΔP — the shaped recovery is the lever.")
 
 
 def tab_platform_cable(p):
@@ -114,18 +128,26 @@ def tab_platform_cable(p):
         else plotting.platform_plot(sim)
     a.plotly_chart(pplot, use_container_width=True)
     b.plotly_chart(plotting.stress_plot(case.t_count, case.stress_Pa), use_container_width=True)
-    st.plotly_chart(drawings.lazywave_profile(fam.base_shape, REFERENCE_CABLE),
+    st.plotly_chart(dwg_cable.lazywave_config(fam.base_shape, REFERENCE_CABLE),
                     use_container_width=True)
     c, d = st.columns([3, 2])
     dmg = {r: case.fatigue[r].damage for r in REGIONS}
     field = _damage_field(fam.base_shape, REFERENCE_CABLE, dmg)
     with c:
-        st.plotly_chart(viz3d.system_figure(fam.base_shape, REFERENCE_CABLE, VOLTURNUS_S,
-                                            stress_along=field,
-                                            color_label="log₁₀ fatigue damage"),
+        st.plotly_chart(viz3d_pro.system_figure_pro(fam.base_shape, REFERENCE_CABLE, VOLTURNUS_S,
+                                                    stress_along=field,
+                                                    color_label="log₁₀ fatigue damage"),
                         use_container_width=True)
     with d:
-        st.plotly_chart(drawings.cross_section(REFERENCE_CABLE), use_container_width=True)
+        st.plotly_chart(dwg_cable.cross_section_datasheet(REFERENCE_CABLE),
+                        use_container_width=True)
+    e, f = st.columns(2)
+    e.plotly_chart(dwg_cable.bend_stiffener_detail(REFERENCE_CABLE), use_container_width=True)
+    f.plotly_chart(dwg_diagrams.hydro_block(), use_container_width=True)
+    st.caption("Left: the hang-off / bell-mouth / polyurethane bend-stiffener detail (curvature "
+               "limiter, MBR 3.5 m). Right: the 6-DOF Cummins coupled-hydrodynamics block — "
+               "potential-flow BEM added mass/radiation memory + hydrostatics + mooring + wave "
+               "excitation + rotor thrust driving the platform that flexes the cable.")
 
     if st.checkbox("Animate the computed platform + cable motion through the event"):
         st.plotly_chart(viz3d.animated_system_figure(fam, VOLTURNUS_S, sim),
@@ -166,6 +188,15 @@ def tab_platform_cable(p):
                    "quasi-static + constant DAF — i.e. the assumed DAF under-predicts the "
                    "dynamic amplification. Treat the ratio as indicative (the model chain "
                    "indicates); the dynamic engine is the higher-fidelity of the two.")
+
+    st.markdown("**Station-keeping & moorings**")
+    mc1, mc2 = st.columns(2)
+    mc1.plotly_chart(dwg_mooring.mooring_profile(VOLTURNUS_S), use_container_width=True)
+    mc2.plotly_chart(dwg_mooring.restoring_curve(VOLTURNUS_S), use_container_width=True)
+    st.caption("Representative catenary mooring line make-up (top chain – buoyant polyester – "
+               "ground chain – drag anchor) and the horizontal restoring characteristic that "
+               "anchors the ~120 s surge period and the static offset at rated thrust. Make-up "
+               "values are representative and disclosed (ASSUMPTIONS.md).")
 
 
 def tab_phase1(p):
@@ -298,9 +329,9 @@ def tab_fatigue(p):
                    help=f"DFF={p['DFF']:.0f}, {p['events_per_year']:.0f} events/yr, "
                         f"occurrence {p['occurrence']:.2f}.")
     a, b = st.columns(2)
-    a.plotly_chart(plotting.rainflow_hist_plot(hf), use_container_width=True)
-    b.plotly_chart(plotting.sn_plot(hf, make_fatigue(p).sn), use_container_width=True)
-    st.plotly_chart(plotting.region_damage_bars(case), use_container_width=True)
+    a.plotly_chart(dwg_fatigue.rainflow_matrix(hf), use_container_width=True)
+    b.plotly_chart(dwg_fatigue.sn_diagram(hf, make_fatigue(p).sn), use_container_width=True)
+    st.plotly_chart(dwg_fatigue.damage_accumulation(case), use_container_width=True)
     st.caption("Fatigue concentrates at the hang-off (stick regime, highest tension). Sag/hog/"
                "touchdown carry far less control-driven damage — the buoyancy section decouples "
                "them.")
@@ -312,6 +343,7 @@ def tab_fatigue(p):
         "hours-in-bin + control-added fatigue per event, on the combined signal. The band "
         "combines seed-to-seed scatter and the S-N log-N scatter (5–95%)."),
         unsafe_allow_html=True)
+    st.plotly_chart(dwg_dlc.dlc_matrix_diagram(), use_container_width=True)
     if st.button("Run the DLC fatigue matrix (offline, ~1–2 min)", type="primary"):
         st.session_state["_run_dlc"] = True
     if st.session_state.get("_run_dlc"):
@@ -364,7 +396,7 @@ def tab_ingest(p):
     cols[2].metric("Columns", ", ".join(res.columns))
     st.plotly_chart(plotting.stress_plot(res.t, {"hang_off": res.stress_Pa}),
                     use_container_width=True)
-    st.plotly_chart(plotting.rainflow_hist_plot(res.fatigue), use_container_width=True)
+    st.plotly_chart(dwg_fatigue.rainflow_matrix(res.fatigue), use_container_width=True)
 
 
 def tab_validation(p):
@@ -415,5 +447,6 @@ def tab_validation(p):
                                for s in SCATTER]), hide_index=True, use_container_width=True)
     st.caption(f"Occurrences sum to {check_occurrence_sums_to_one():.2f}. The full Hs×Tp scatter "
                "is reduced to these fatigue-relevant bins (ASSUMPTIONS.md).")
+    st.plotly_chart(dwg_dlc.metocean_scatter_diagram(), use_container_width=True)
     st.caption("Sensitivity: change the S-N slope m and Goodman/Gerber in the sidebar and watch "
                "the Fatigue and Comparison tabs — the qualitative conclusion survives.")
