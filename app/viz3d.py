@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 from app.theme import ACCENT, GREY, GRID_LINE, INK, WARN
 from models.dynamic_cable import DynamicCable
 from models.volturnus_s import Platform
-from physics.cable import StaticShape
+from physics.cable import QuasiStaticFamily, StaticShape
 
 
 def _cylinder(x0, y0, z0, z1, radius, n=18, color=ACCENT, opacity=0.5, name=""):
@@ -123,4 +123,102 @@ def system_figure(shape: StaticShape, cable: DynamicCable, platform: Platform,
         paper_bgcolor="rgba(0,0,0,0)",
         legend=dict(bgcolor="rgba(255,255,255,0.7)", bordercolor=GRID_LINE, borderwidth=1),
     )
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Animated system model — driven by the computed platform motion (§8)
+# ---------------------------------------------------------------------------
+def _platform_lines(platform: Platform):
+    """Return a list of (x, y, z) polylines for the platform frame + tower + rotor."""
+    cols = _column_positions(platform)
+    lines = []
+    for (cx, cy) in cols:                       # vertical column edges
+        lines.append((np.array([cx, cx]), np.array([cy, cy]),
+                      np.array([-platform.draft_m, platform.freeboard_m])))
+    cx0, cy0 = cols[-1]
+    for (cx, cy) in cols[:-1]:                   # pontoons (centre -> offset)
+        zc = -platform.draft_m + 3.0
+        lines.append((np.array([cx0, cx]), np.array([cy0, cy]), np.array([zc, zc])))
+    lines.append((np.array([0, 0]), np.array([0, 0]),
+                  np.array([platform.freeboard_m, platform.hub_height_m])))   # tower
+    th = np.linspace(0, 2 * np.pi, 40)           # rotor disc (y-z plane)
+    Rrot = 120.0
+    lines.append((np.zeros_like(th), Rrot * np.cos(th),
+                  platform.hub_height_m + Rrot * np.sin(th)))
+    return lines
+
+
+def _rigid_transform(x, y, z, surge, pitch_rad):
+    """Rigid body: pitch about the y-axis through MSL origin, then surge in +x."""
+    xr = x * np.cos(pitch_rad) + z * np.sin(pitch_rad) + surge
+    zr = -x * np.sin(pitch_rad) + z * np.cos(pitch_rad)
+    return xr, y, zr
+
+
+def animated_system_figure(family: QuasiStaticFamily, platform: Platform, sim,
+                           n_frames: int = 24, exaggeration: float = 8.0) -> go.Figure:
+    """Animate the platform + cable through the computed motion over the event window.
+
+    Uses the computed surge/pitch time series (support+recovery window). Motion is small,
+    so it is exaggerated by ``exaggeration`` for visibility — this is stated in the caption.
+    The cable follows via the quasi-static family shape at the fairlead offset.
+    """
+    cable = family.cable
+    depth = cable.water_depth_m
+    # Window: from the event to ~120 s after (captures support + recovery + ring-down).
+    t = sim.t
+    t0 = sim.config.schedule.t_event_s
+    win = (t >= t0 - 10) & (t <= t0 + 130)
+    idx = np.linspace(np.argmax(win), len(t) - 1 - np.argmax(win[::-1]), n_frames).astype(int)
+    surge = sim.surge_m
+    pitch = np.radians(sim.pitch_deg)
+    surge_ref, pitch_ref = surge[win].mean(), pitch[win].mean()
+    z_att = cable.hangoff_z_m
+
+    extent_x = (-80, 190)
+    extent_y = (-80, 80)
+    fig = go.Figure()
+    # Static context.
+    fig.add_trace(_plane(0.0, extent_x, extent_y, "#BFD3E6", 0.15))
+    fig.add_trace(_plane(-depth, extent_x, extent_y, "#D8CBB0", 0.30))
+    plines = _platform_lines(platform)
+
+    def frame_traces(k):
+        i = idx[k]
+        s = (surge[i] - surge_ref) * exaggeration
+        th = (pitch[i] - pitch_ref) * exaggeration
+        traces = []
+        for (lx, ly, lz) in plines:
+            xr, yr, zr = _rigid_transform(lx, ly, lz, s, th)
+            traces.append(go.Scatter3d(x=xr, y=yr, z=zr, mode="lines",
+                                       line=dict(color=ACCENT, width=5), hoverinfo="skip",
+                                       showlegend=False))
+        # Cable at the (exaggerated) fairlead offset.
+        dx = ((surge[i] - surge_ref) + z_att * (pitch[i] - pitch_ref)) * exaggeration
+        rc = family.shape_at(dx)
+        traces.append(go.Scatter3d(x=rc[:, 0], y=np.zeros(len(rc)), z=rc[:, 1], mode="lines",
+                                   line=dict(color=WARN, width=6), name="cable",
+                                   showlegend=False))
+        return traces
+
+    for tr in frame_traces(0):
+        fig.add_trace(tr)
+    n_anim = len(plines) + 1
+    frames = [go.Frame(data=frame_traces(k), name=str(k),
+                       traces=list(range(2, 2 + n_anim))) for k in range(n_frames)]
+    fig.frames = frames
+    fig.update_layout(
+        updatemenus=[dict(type="buttons", showactive=False, x=0.02, y=0.05,
+                          buttons=[dict(label="▶ Play", method="animate",
+                                        args=[None, dict(frame=dict(duration=90, redraw=True),
+                                                         fromcurrent=True)]),
+                                   dict(label="❚❚ Pause", method="animate",
+                                        args=[[None], dict(frame=dict(duration=0, redraw=False),
+                                                           mode="immediate")])])],
+        scene=dict(xaxis=dict(title="x (m)", gridcolor=GRID_LINE),
+                   yaxis=dict(title="y (m)", gridcolor=GRID_LINE),
+                   zaxis=dict(title="z (m)", gridcolor=GRID_LINE),
+                   aspectmode="data", camera=dict(eye=dict(x=1.6, y=1.3, z=0.6))),
+        margin=dict(l=0, r=0, t=10, b=0), height=560, paper_bgcolor="rgba(0,0,0,0)")
     return fig

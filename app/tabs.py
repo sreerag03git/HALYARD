@@ -117,6 +117,13 @@ def tab_platform_cable(p):
     with d:
         st.plotly_chart(drawings.cross_section(REFERENCE_CABLE), use_container_width=True)
 
+    if st.checkbox("Animate the computed platform + cable motion through the event"):
+        st.plotly_chart(viz3d.animated_system_figure(fam, VOLTURNUS_S, sim),
+                        use_container_width=True)
+        st.caption("Press ▶ Play. Driven by the computed surge/pitch over the support+recovery "
+                   "window; motion is exaggerated ×8 for visibility (the true excursions are "
+                   "sub-metre / sub-degree).")
+
 
 def tab_phase1(p):
     st.markdown("### Phase-1 gate — can the effect even exist here?")

@@ -38,6 +38,17 @@ Reduced-order output is *never* presented as high-fidelity.
 
 See `ASSUMPTIONS.md` for every representative value and its source, and `EXTENSIONS.md` for expert additions beyond the mandatory spine.
 
+## The analysis flow
+
+1. **Overview** — the system (interactive 3-D model from real geometry) and the causation chain.
+2. **Grid & control / Platform & cable** — the coupled event, the platform motion, the cable stress.
+3. **Phase-1 gate** — the honesty check: does control add meaningful hang-off fatigue vs waves, against *pre-registered* thresholds? Returns **PASS** or **NEGLIGIBLE**.
+4. **Recovery sweep (Stage A)** and **Comparison (Stage B)** — unlocked only on PASS. Stage B first proves the incumbent and HALYARD recoveries are *grid-code equivalent*, then compares hang-off fatigue and the AEP trade.
+5. **Fatigue detail** — rainflow → mean-stress → S-N → Miner on the combined signal, plus annualized life across a 7-bin sea-state scatter; live sensitivity to the S-N slope and Goodman/Gerber.
+6. **High-fidelity ingest** and **Validation**.
+
+A key honest finding the tool surfaces: control adds a meaningful fatigue fraction **within calm, frequent seas**, but integrated over the full scatter **storm waves dominate annual hang-off fatigue**, so the annual share is small. The headline is deliberately narrow.
+
 ## Run locally
 
 ```bash
@@ -47,7 +58,11 @@ streamlit run streamlit_app.py
 
 ## Deploy on Streamlit Community Cloud
 
-Point Streamlit Community Cloud at this repo; the entry point is `streamlit_app.py` at the repo root. `requirements.txt` is pinned and pure-pip (no OpenFAST/Fortran/OrcaFlex compilation). The app is designed to run within the ~1 GB / single-process envelope: long runs are cached (`st.cache_data`) and seeded for reproducibility.
+Point Streamlit Community Cloud at this repo (a private repo works — link your GitHub); the entry point is `streamlit_app.py` at the repo root. `requirements.txt` is pinned and pure-pip (no OpenFAST/Fortran/OrcaFlex compilation). The app runs within the ~1 GB / single-process envelope: the lazy-wave cable family and every simulation are cached (`st.cache_resource` / `st.cache_data`) and seeded for reproducibility.
+
+**First load computes** the cable family and the Phase-1 gate (tens of seconds, with a spinner); afterwards everything is cached and instant until inputs change. The multi-run stages (recovery sweep, three-controller comparison, across-scatter annualization) are behind explicit **Run** buttons.
+
+Continuous integration (`.github/workflows/ci.yml`) runs the pytest suite and a headless smoke test of the app on every push.
 
 ## Cited choices
 

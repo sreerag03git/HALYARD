@@ -305,9 +305,17 @@ class QuasiStaticFamily:
     region_kappa: dict                   # region -> geometric curvature array [1/m] vs dx
     base_shape: StaticShape              # shape at dx = 0
     cable: DynamicCable
+    shapes_xz: np.ndarray = None         # (n_dx, n_nodes+1, 2) full node positions vs dx
 
     def angle_at(self, dx: np.ndarray) -> np.ndarray:
         return np.interp(dx, self.dx, self.angle_deg)
+
+    def shape_at(self, dx_val: float) -> np.ndarray:
+        """Full cable node positions at a top offset, linearly interpolated (for animation)."""
+        j = np.clip(np.searchsorted(self.dx, dx_val) - 1, 0, len(self.dx) - 2)
+        d0, d1 = self.dx[j], self.dx[j + 1]
+        t = 0.0 if d1 == d0 else np.clip((dx_val - d0) / (d1 - d0), 0.0, 1.0)
+        return (1 - t) * self.shapes_xz[j] + t * self.shapes_xz[j + 1]
 
 
 def build_quasistatic_family(cable: DynamicCable | None = None,
@@ -343,10 +351,11 @@ def build_quasistatic_family(cable: DynamicCable | None = None,
             K[name][i] = sh.curvature[r[name]]
     # sort by dx for interp
     idx = np.argsort(dxs)
+    shapes_xz = np.array([np.column_stack([shapes[i].x, shapes[i].z]) for i in range(n)])[idx]
     return QuasiStaticFamily(dx=dxs[idx], angle_deg=angle[idx],
                              region_T={k: T[k][idx] for k in REGIONS},
                              region_kappa={k: K[k][idx] for k in REGIONS},
-                             base_shape=base, cable=cable)
+                             base_shape=base, cable=cable, shapes_xz=shapes_xz)
 
 
 def region_stress_timeseries(family: QuasiStaticFamily, region: str,

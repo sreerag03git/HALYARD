@@ -156,12 +156,20 @@ def sidebar_inputs() -> dict:
         wind_cap = st.number_input("Supporting wind capacity (MW)", 100.0, 5000.0,
                                    float(b["sim"]["wind_capacity_MW"]), 100.0)
 
-    return dict(case_name=case_name, H_sys=H_sys, D_load=float(b["grid"]["D_load"]),
-                S_base=float(S_base), p_load=p_load, Hs=Hs, Tp=Tp, wind=wind, dP_max=dP_max,
-                H_wt=H_wt, R_droop=float(b["support"]["R_droop"]),
-                support_window=support_window, tau_rec=tau_rec, rate_rec=rate_rec, m1=m1,
-                sigma_u=1400.0, mean_stress=mean_stress, DFF=DFF, daf=daf,
-                hangoff_stick=hangoff_stick, thr_added=thr_added, thr_recov=thr_recov,
-                thr_amp=thr_amp, seed=int(seed), t_end=float(t_end), wind_cap=float(wind_cap),
-                events_per_year=base.events_per_year, occurrence=base.sea_state_occurrence,
-                case_description=base.description)
+    params = dict(case_name=case_name, H_sys=H_sys, D_load=float(b["grid"]["D_load"]),
+                  S_base=float(S_base), p_load=p_load, Hs=Hs, Tp=Tp, wind=wind, dP_max=dP_max,
+                  H_wt=H_wt, R_droop=float(b["support"]["R_droop"]),
+                  support_window=support_window, tau_rec=tau_rec, rate_rec=rate_rec, m1=m1,
+                  sigma_u=1400.0, mean_stress=mean_stress, DFF=DFF, daf=daf,
+                  hangoff_stick=hangoff_stick, thr_added=thr_added, thr_recov=thr_recov,
+                  thr_amp=thr_amp, seed=int(seed), t_end=float(t_end), wind_cap=float(wind_cap),
+                  events_per_year=base.events_per_year, occurrence=base.sea_state_occurrence,
+                  case_description=base.description)
+    # Reproducibility: download the exact run configuration (§11).
+    import yaml
+    st.sidebar.download_button(
+        "Download run config (YAML)",
+        data=yaml.safe_dump({k: v for k, v in params.items() if k != "case_description"},
+                            sort_keys=True),
+        file_name=f"halyard_run_{case_name}.yaml", mime="text/yaml")
+    return params
