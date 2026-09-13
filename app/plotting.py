@@ -83,6 +83,22 @@ def platform_plot(sim):
                                xtitle="time (s)", ytitle="surge (m)")
 
 
+def wind_pitch_plot(sim):
+    """Turbulent wind (if any) and blade-pitch response — the aero-servo layer."""
+    fig = go.Figure()
+    if sim.wind_ms is not None:
+        fig.add_trace(go.Scatter(x=sim.t, y=sim.wind_ms, name="wind speed (m/s)",
+                                 line=dict(color=GREY, width=1.3)))
+    if sim.blade_pitch_deg is not None:
+        fig.add_trace(go.Scatter(x=sim.t, y=sim.blade_pitch_deg, name="blade pitch (deg)",
+                                 yaxis="y2", line=dict(color=ACCENT, width=1.8)))
+    _mode_shading(fig, sim)
+    fig.update_layout(yaxis2=dict(title="blade pitch (deg)", overlaying="y", side="right",
+                                  showgrid=False))
+    return theme.plotly_layout(fig, "Inflow & blade pitch (ROSCO-style control)",
+                               xtitle="time (s)", ytitle="wind speed (m/s)")
+
+
 def platform_6dof_plot(sim):
     """All available platform DOFs (6-DOF engine): translations and rotations, two axes."""
     fig = go.Figure()

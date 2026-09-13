@@ -37,6 +37,9 @@ def make_config(p: dict, enable_support: bool = True,
                      wind_capacity_MW=p["wind_cap"], enable_support=enable_support,
                      hydro_6dof=p.get("hydro_6dof", True),
                      wave_heading_deg=p.get("wave_heading", 0.0),
+                     turbulence_TI=p.get("turbulence_TI", 0.0),
+                     blade_pitch=p.get("blade_pitch", True),
+                     dynamic_inflow=p.get("dynamic_inflow", True),
                      grid=grid, support=support, recovery=rp, schedule=schedule)
 
 
@@ -136,10 +139,14 @@ def sidebar_inputs() -> dict:
     Hs = st.sidebar.slider("Significant wave height Hs (m)", 0.25, 5.0,
                            float(b["sim"]["Hs_m"]), 0.25)
     Tp = st.sidebar.slider("Peak period Tp (s)", 5.0, 16.0, float(b["sim"]["Tp_s"]), 0.5)
-    wind = st.sidebar.slider("Wind speed (m/s, ≤ rated 10.59)", 6.0, 10.5,
-                             float(b["sim"]["wind_ms"]), 0.5)
+    wind = st.sidebar.slider("Wind speed (m/s; rated 10.59)", 6.0, 24.0,
+                             float(b["sim"]["wind_ms"]), 0.5,
+                             help="Above rated, the ROSCO-style blade-pitch controller sheds load.")
     wave_heading = st.sidebar.slider("Wave heading (deg, 0 = wind-aligned)", 0.0, 90.0,
                                      0.0, 15.0, help="Wind-wave misalignment (6-DOF engine).")
+    turbulence_TI = st.sidebar.slider("Turbulence intensity (0 = steady)", 0.0, 0.20,
+                                      0.0, 0.02, help="Kaimal turbulent inflow (IEC 61400-1). "
+                                      "Off by default to isolate the control effect.")
 
     st.sidebar.markdown("**Hydrodynamics**")
     hydro_engine = st.sidebar.radio(
@@ -197,6 +204,7 @@ def sidebar_inputs() -> dict:
                   hangoff_stick=hangoff_stick, thr_added=thr_added, thr_recov=thr_recov,
                   thr_amp=thr_amp, seed=int(seed), t_end=float(t_end), wind_cap=float(wind_cap),
                   hydro_6dof=hydro_6dof, wave_heading=wave_heading,
+                  turbulence_TI=turbulence_TI, blade_pitch=True, dynamic_inflow=True,
                   events_per_year=base.events_per_year, occurrence=base.sea_state_occurrence,
                   case_description=base.description)
     # Reproducibility: download the exact run configuration (§11).

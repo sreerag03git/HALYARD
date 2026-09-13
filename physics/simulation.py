@@ -48,6 +48,9 @@ class SimConfig:
     beta_deg: float = 0.0               # blade pitch (0 for <= rated wind)
     hydro_6dof: bool = True             # True: BEM 6-DOF Cummins hydro; False: fitted 2-DOF
     wave_heading_deg: float = 0.0       # wave direction (0 = aligned with wind/+x)
+    turbulence_TI: float = 0.0          # >0 enables Kaimal turbulent inflow at this intensity
+    blade_pitch: bool = True            # ROSCO-style collective pitch (enables above-rated)
+    dynamic_inflow: bool = True         # first-order dynamic-inflow lag on rotor thrust
     grid: GridModel = field(default_factory=GridModel)
     support: SupportParams = field(default_factory=SupportParams)
     recovery: RecoveryParams = field(default_factory=RecoveryParams)
@@ -78,6 +81,8 @@ class SimResult:
     sway_m: np.ndarray = None
     yaw_deg: np.ndarray = None
     heave_vel: np.ndarray = None
+    blade_pitch_deg: np.ndarray = None
+    wind_ms: np.ndarray = None
 
     @property
     def counting_mask(self) -> np.ndarray:
@@ -251,10 +256,13 @@ def _run_2dof(cfg: SimConfig, turbine: Turbine | None = None,
     )
 
 
-# 6-DOF hydro states within the coupled vector: grid(3) | omega | dP_ctrl | q(6) | qdot(6).
+# 6-DOF states: grid(3) | omega | dP_ctrl | q(6) | qdot(6) | beta | I_pitch | F_lag.
 H_Q0 = 5           # surge, sway, heave, roll, pitch, yaw
 H_V0 = 11          # velocities
-N_STATES_6 = 17
+S_BETA = 17        # collective blade pitch [rad]
+S_IPITCH = 18      # pitch-controller integrator
+S_FLAG = 19        # dynamic-inflow lagged thrust [N]
+N_STATES_6 = 20
 _HYDRO_CACHE = {}
 
 
@@ -264,6 +272,19 @@ def _get_hydro_model():
     if "m" not in _HYDRO_CACHE:
         _HYDRO_CACHE["m"] = build_hydro_6dof()
     return _HYDRO_CACHE["m"]
+
+
+def _steady_pitch_deg(tb, omega0, V, P0, interp2, CP2, half_rho_A, R, eta):
+    """Collective pitch [deg] that makes aero power match the operating point (0 below rated)."""
+    lam = omega0 * R / max(V, 0.1)
+    target_Paero = P0 / eta
+    best, best_err = 0.0, 1e30
+    for beta in np.linspace(0.0, 25.0, 60):
+        Paero = half_rho_A * interp2(CP2, lam, beta) * V ** 3
+        err = abs(Paero - target_Paero)
+        if err < best_err:
+            best, best_err = beta, err
+    return best
 
 
 def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
@@ -284,23 +305,42 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
     participation = load_participation(cfg.wind_capacity_MW, cfg.grid)
     z_hub = tb.hub_height_m
 
-    # Fast aero lookups (as in the 2-DOF path).
+    # Wind: steady, or Kaimal turbulent inflow (§5.8) at the requested intensity.
+    if cfg.turbulence_TI > 0:
+        from physics.wind import TurbulentWind
+        V_arr = TurbulentWind(U_mean=cfg.wind_ms, TI=cfg.turbulence_TI, z_hub=z_hub,
+                              seed=cfg.wave_seed + 7).series(ts)
+    else:
+        V_arr = np.full(n, cfg.wind_ms)
+
+    # Fast 2-D aero interpolation over (lambda, beta) from the (real) rotor deck.
     _R = tb.rotor_radius_m
     _half_rho_A = 0.5 * 1.225 * tb.rotor_area_m2
-    _lam = np.linspace(0.3, 20.0, 2000)
-    _ct = np.array([tb.aero.ct(l, cfg.beta_deg) for l in _lam])
-    _cp = np.array([tb.aero.cp(l, cfg.beta_deg) for l in _lam])
+    _lamg = np.linspace(0.3, 18.0, 220)
+    _betag = np.linspace(-5.0, 40.0, 91)     # deg
+    _CT2 = np.array([[tb.aero.ct(l, b) for b in _betag] for l in _lamg])
+    _CP2 = np.array([[tb.aero.cp(l, b) for b in _betag] for l in _lamg])
     _eta, _J = tb.converter_efficiency, tb.rotor_inertia_kgm2
+    _dl = _lamg[1] - _lamg[0]
+    _db = _betag[1] - _betag[0]
 
-    def _thrust(omega, v_nac):
-        v_rel = max(cfg.wind_ms - v_nac, 0.1)
-        return _half_rho_A * np.interp(omega * _R / v_rel, _lam, _ct) * v_rel ** 2
+    def _interp2(tab, lam, beta_deg):
+        lam = min(max(lam, _lamg[0]), _lamg[-2])
+        b = min(max(beta_deg, _betag[0]), _betag[-2])
+        i = int((lam - _lamg[0]) / _dl); j = int((b - _betag[0]) / _db)
+        tl = (lam - _lamg[i]) / _dl; tb_ = (b - _betag[j]) / _db
+        return (tab[i, j] * (1 - tl) * (1 - tb_) + tab[i + 1, j] * tl * (1 - tb_)
+                + tab[i, j + 1] * (1 - tl) * tb_ + tab[i + 1, j + 1] * tl * tb_)
 
-    def _domega(omega, v_nac, P_elec):
-        v_rel = max(cfg.wind_ms - v_nac, 0.1)
+    def _thrust(omega, v_nac, beta_deg, V):
+        v_rel = max(V - v_nac, 0.1)
+        return _half_rho_A * _interp2(_CT2, omega * _R / v_rel, beta_deg) * v_rel ** 2
+
+    def _domega(omega, v_nac, P_elec, beta_deg, V):
+        v_rel = max(V - v_nac, 0.1)
         omega = max(omega, 1e-3)
-        T_aero = _half_rho_A * np.interp(omega * _R / v_rel, _lam, _cp) * v_rel ** 3 / omega
-        return (T_aero - P_elec / (_eta * omega)) / _J
+        cp = _interp2(_CP2, omega * _R / v_rel, beta_deg)
+        return (_half_rho_A * cp * v_rel ** 3 / omega - P_elec / (_eta * omega)) / _J
 
     Minv, C, Bv = hy.Minv, hy.C, hy.B_visc
     g = cfg.grid
@@ -310,8 +350,20 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
     _P_pre, _rated, t_event, enable = ctl.P_pre, tb.rated_power_W, cfg.schedule.t_event_s, \
         cfg.enable_support
 
-    # Initial static offset under steady thrust.
-    F_thrust0 = _thrust(omega0, 0.0)
+    # ROSCO-style collective-pitch controller (active above rated) + floating feedback.
+    om_rated = tb.omega_rated_rads
+    pitch_on = cfg.blade_pitch
+    KP_P, KI_P = 6.0, 2.0            # PI gains on rotor-speed error (rad per rad/s)
+    KF_P = 0.05                      # floating (nacelle-velocity) feedback gain
+    BETA_MAX = np.radians(25.0)
+    PITCH_RATE = np.radians(8.0)     # actuator rate limit [rad/s]
+    TAU_PITCH = 0.10                 # actuator lag [s]
+    tau_ind = 4.0 if cfg.dynamic_inflow else 0.02   # dynamic-inflow time constant [s]
+
+    # Steady blade pitch to reach the operating point (above rated needs beta>0).
+    beta0_deg = _steady_pitch_deg(tb, omega0, cfg.wind_ms, P0, _interp2, _CP2, _half_rho_A,
+                                  _R, _eta)
+    F_thrust0 = _thrust(omega0, 0.0, beta0_deg, cfg.wind_ms)
     F0 = np.zeros(6)
     F0[0] = F_thrust0
     F0[4] = F_thrust0 * z_hub
@@ -320,16 +372,20 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
     y = np.zeros(N_STATES_6)
     y[S_OMEGA] = omega0
     y[H_Q0:H_Q0 + 6] = q0
+    y[S_BETA] = np.radians(beta0_deg)
+    y[S_FLAG] = F_thrust0
     vel_hist = np.zeros((n, 6))
 
-    def rhs(t, y, fw, f_rad):
+    def rhs(t, y, fw, f_rad, V):
         df, pgov, rocof_meas = y[0], y[1], y[2]
         omega, dP_ctrl = y[S_OMEGA], y[S_DPCTRL]
-        q = y[H_Q0:H_Q0 + 6]
+        beta, I_p, F_lag = y[S_BETA], y[S_IPITCH], y[S_FLAG]
         qd = y[H_V0:H_V0 + 6]
+        q = y[H_Q0:H_Q0 + 6]
         v_nac = qd[0] + z_hub * qd[4]
+        beta_deg = np.degrees(beta)
         P_elec = ctl.elec_power_W(omega, dP_ctrl)
-        F_thrust = _thrust(omega, v_nac)
+        F_thrust_qs = _thrust(omega, v_nac, beta_deg, V)
         if enable:
             p_wind = participation * (P_elec - _P_pre) / _rated
             p_load = cfg.p_load_pu if t >= t_event else 0.0
@@ -340,17 +396,27 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
         if (pgov >= gRes and dpgov > 0) or (pgov <= -gRes and dpgov < 0):
             dpgov = 0.0
         drocof = (gf0 * ddf - rocof_meas) / gTr
+        # Pitch controller (PI on omega error above rated + floating feedback).
+        e = omega - om_rated
+        beta_cmd = KP_P * e + KI_P * I_p + KF_P * v_nac
+        beta_cmd = min(max(beta_cmd, 0.0), BETA_MAX)
+        saturated = (beta_cmd <= 0.0 and e < 0) or (beta_cmd >= BETA_MAX and e > 0)
+        dI = 0.0 if (not pitch_on or saturated) else e
+        dbeta = 0.0 if not pitch_on else np.clip((beta_cmd - beta) / TAU_PITCH,
+                                                 -PITCH_RATE, PITCH_RATE)
+        dF_lag = (F_thrust_qs - F_lag) / tau_ind          # dynamic inflow lag
         d = np.empty(N_STATES_6)
         d[0], d[1], d[2] = ddf, dpgov, drocof
-        d[S_OMEGA] = _domega(omega, v_nac, P_elec)
+        d[S_OMEGA] = _domega(omega, v_nac, P_elec, beta_deg, V)
         d[S_DPCTRL] = (ctl.ddP_ctrl(dP_ctrl, df, rocof_meas, omega)
                        if enable else -dP_ctrl / tau_sup)
         F_ext = np.zeros(6)
-        F_ext[0] = F_thrust
-        F_ext[4] = F_thrust * z_hub
+        F_ext[0] = F_lag
+        F_ext[4] = F_lag * z_hub
         qdd = Minv @ (F_ext + fw + f_rad - Bv @ qd - C @ q)
         d[H_Q0:H_Q0 + 6] = qd
         d[H_V0:H_V0 + 6] = qdd
+        d[S_BETA], d[S_IPITCH], d[S_FLAG] = dbeta, dI, dF_lag
         return d
 
     Y = np.empty((n, N_STATES_6))
@@ -362,13 +428,15 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
         f_rad = hy.radiation_force(vel_hist[:i], dt) if i > 1 else np.zeros(6)
         fw1, fw4 = Fwave[i - 1], Fwave[i]
         fw2 = 0.5 * (fw1 + fw4)
+        V1, V4 = V_arr[i - 1], V_arr[i]
+        V2 = 0.5 * (V1 + V4)
         if enable:
             ctl.update_mode(t, y[S_DF], y[S_OMEGA])
         modes[i - 1] = ctl.mode
-        k1 = rhs(t, y, fw1, f_rad)
-        k2 = rhs(t + 0.5 * dt, y + 0.5 * dt * k1, fw2, f_rad)
-        k3 = rhs(t + 0.5 * dt, y + 0.5 * dt * k2, fw2, f_rad)
-        k4 = rhs(t + dt, y + dt * k3, fw4, f_rad)
+        k1 = rhs(t, y, fw1, f_rad, V1)
+        k2 = rhs(t + 0.5 * dt, y + 0.5 * dt * k1, fw2, f_rad, V2)
+        k3 = rhs(t + 0.5 * dt, y + 0.5 * dt * k2, fw2, f_rad, V2)
+        k4 = rhs(t + dt, y + dt * k3, fw4, f_rad, V4)
         y = y + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
         Y[i] = y
     modes[-1] = ctl.mode
@@ -377,7 +445,7 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
     dP = Y[:, S_DPCTRL]
     P_elec = np.array([ctl.elec_power_W(w, d) for w, d in zip(omega, dP)])
     v_nac = Y[:, H_V0] + z_hub * Y[:, H_V0 + 4]
-    thrust = np.array([_thrust(w, v) for w, v in zip(omega, v_nac)])
+    thrust = Y[:, S_FLAG]      # the platform-forcing (dynamic-inflow lagged) thrust
     return SimResult(
         t=ts, freq_hz=gf0 * (1.0 + Y[:, S_DF]), rocof_hz_s=Y[:, S_ROCOF],
         omega_rads=omega, dP_ctrl_pu=dP, P_elec_W=P_elec, thrust_N=thrust,
@@ -387,7 +455,10 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
         heave_m=Y[:, H_Q0 + 2], roll_deg=np.degrees(Y[:, H_Q0 + 3]),
         sway_m=Y[:, H_Q0 + 1], yaw_deg=np.degrees(Y[:, H_Q0 + 5]),
         heave_vel=Y[:, H_V0 + 2], fidelity="reduced-order (live, 6-DOF BEM hydro)",
+        blade_pitch_deg=np.degrees(Y[:, S_BETA]), wind_ms=V_arr,
         meta={"omega0_rads": omega0, "P0_W": P0, "participation": participation,
               "static_surge_m": q0[0], "static_pitch_deg": np.degrees(q0[4]),
-              "static_heave_m": q0[2], "aero_provenance": tb.aero.provenance,
+              "static_heave_m": q0[2], "beta0_deg": beta0_deg,
+              "aero_provenance": tb.aero.provenance, "realized_TI": float(np.std(V_arr) /
+              np.mean(V_arr)) if cfg.turbulence_TI > 0 else 0.0,
               "wave_Hs_realized": wave.Hs_realized, "hydro": "6-DOF BEM Cummins"})

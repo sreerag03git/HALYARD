@@ -90,6 +90,11 @@ def tab_grid_control(p):
     a.plotly_chart(plotting.rotor_plot(sim), use_container_width=True)
     b.plotly_chart(plotting.power_thrust_plot(sim), use_container_width=True)
     st.plotly_chart(plotting.rocof_plot(sim), use_container_width=True)
+    if (sim.wind_ms is not None and np.ptp(sim.wind_ms) > 0.1) or \
+       (sim.blade_pitch_deg is not None and np.ptp(sim.blade_pitch_deg) > 0.1):
+        st.plotly_chart(plotting.wind_pitch_plot(sim), use_container_width=True)
+        st.caption("Turbulent inflow (if enabled) and the ROSCO-style blade-pitch response "
+                   "(active above rated wind, with floating-feedback damping).")
 
 
 def tab_platform_cable(p):
