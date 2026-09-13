@@ -8,7 +8,7 @@ description: >
   fatigue at a small AEP cost. Turbine IEA-15-240-RWT, platform VolturnUS-S (frozen refs).
 
 grid:
-  H_sys_s: 2.5          # low-inertia
+  H_sys_s: 2.0          # low-inertia (weak grid)
   D_load: 1.0
   R_sys: 0.05
   T_gov_s: 8.0
@@ -17,10 +17,10 @@ grid:
   S_base_MW: 3000.0
 
 support:
-  H_wt_s: 10.0          # emulated synthetic inertia (control gain)
+  H_wt_s: 12.0          # emulated synthetic inertia (control gain)
   R_droop: 0.05
   deadband_hz: 0.015
-  dP_max: 0.18          # converter short-term overload headroom
+  dP_max: 0.20          # converter short-term overload headroom
   rate_pu_s: 0.50
   tau_s: 0.20
 
@@ -34,17 +34,17 @@ recovery:
 
 schedule:
   t_event_s: 100.0
-  support_window_s: 20.0
+  support_window_s: 25.0
 
 sim:
   wind_ms: 9.0          # below rated (blade pitch = 0), rotor has KE + aero headroom
-  Hs_m: 0.75            # calm, frequent sea state
+  Hs_m: 0.5             # very calm sea (regime where control matters vs 6-DOF wave motion)
   Tp_s: 8.0
   wave_seed: 1234
   t_end_s: 350.0
   dt_s: 0.025
   t_discard_s: 100.0
-  p_load_pu: 0.10       # loss of infeed (system pu)
+  p_load_pu: 0.12       # loss of infeed (system pu)
   wind_capacity_MW: 900.0   # supporting fleet (participation 0.30)
   beta_deg: 0.0
 
