@@ -90,6 +90,24 @@ choices:
 Limitations (deferred, EXTENSIONS.md): second-order slow-drift, nonlinear catenary mooring,
 frequency-dependent viscous drag, and the free-surface lid.
 
+### 3a. Dynamic FE cable (higher-fidelity cable engine) — `physics/cable_dynamic.py`
+
+Alongside the quasi-static family, a **dynamic lumped-mass cable** is available (Platform &
+cable tab). It is driven by the fairlead 6-DOF motion and integrates the transverse dynamics
+under Morison inertia+drag (Airy wave kinematics per node, decaying with depth), bending
+(EI), seabed contact + Coulomb friction, and a clamped bend-stiffener top BC that rotates
+with platform pitch. Inextensibility is enforced by red-black position-based-dynamics
+projection (stable at the simulation time step — the stiff axial wave is not resolved, which
+is valid because the fatigue-relevant response is at wave frequencies far below axial
+resonance). Cross-flow **VIV** is a van der Pol wake oscillator (Facchinetti et al. 2004).
+The dynamic tension comes from the moving geometry; dynamic amplification is therefore
+computed self-consistently rather than assumed via a DAF — it typically shows a **larger
+hang-off stress range than the quasi-static + constant DAF**, i.e. the assumed DAF
+under-predicts. Presented as indicative ("the model chain indicates"); it is the
+higher-fidelity of the two cable engines. Per-segment rest lengths are taken from the static
+shape (the seabed tail is straightened), and the fairlead is driven by the DEVIATION from
+the mean offset (the static shape already sits at the mean lean).
+
 ### 2b. Reduced-order 2-DOF (surge, pitch) motion model — fast screening engine (the fit, stated)
 
 The spec permits fitting reduced coefficients to published dynamics. HALYARD anchors

@@ -126,6 +126,39 @@ def tab_platform_cable(p):
                    "window; motion is exaggerated ×8 for visibility (the true excursions are "
                    "sub-metre / sub-degree).")
 
+    st.markdown("**Dynamic FE cable** (Morison hydro + bending + seabed friction + VIV)")
+    st.markdown(what_this_shows(
+        "A true dynamic lumped-mass cable driven by the fairlead motion, vs the quasi-static "
+        "family. Captures dynamic amplification and VIV self-consistently instead of an assumed "
+        "DAF — a higher-fidelity live cable (slower; cached)."), unsafe_allow_html=True)
+    from app.runner import cached_dynamic_cable
+    viv_on = st.checkbox("Include VIV (van der Pol wake oscillator)", value=True)
+    if st.button("Run dynamic FE cable"):
+        st.session_state["_run_dyn"] = True
+    if st.session_state.get("_run_dyn"):
+        with st.spinner("Integrating the dynamic cable…"):
+            dc = cached_dynamic_cable(p, viv_on)
+        import plotly.graph_objects as go
+        from app.theme import ACCENT, WARN
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=dc["t"], y=dc["s_qs"] / 1e6, name="quasi-static + DAF",
+                                 line=dict(color="#9AA3AB", width=1.4)))
+        fig.add_trace(go.Scatter(x=dc["t"], y=dc["s_dyn"] / 1e6, name="dynamic FE cable",
+                                 line=dict(color=ACCENT, width=1.6)))
+        st.plotly_chart(plotting.theme.plotly_layout(
+            fig, "Hang-off stress: dynamic FE vs quasi-static", xtitle="time (s)",
+            ytitle="stress (MPa)"), use_container_width=True)
+        cc = st.columns(2)
+        ratio = dc["D_dyn"] / dc["D_qs"] if dc["D_qs"] > 0 else float("inf")
+        cc[0].metric("Hang-off damage (dynamic / quasi-static)", f"{ratio:.1f}×")
+        cc[1].metric("Dynamic stress range",
+                     f"{(dc['s_dyn'].max()-dc['s_dyn'].min())/1e6:.2f} MPa",
+                     f"vs QS {(dc['s_qs'].max()-dc['s_qs'].min())/1e6:.2f} MPa")
+        st.caption("The dynamic cable typically shows a larger stress range than the "
+                   "quasi-static + constant DAF — i.e. the assumed DAF under-predicts the "
+                   "dynamic amplification. Treat the ratio as indicative (the model chain "
+                   "indicates); the dynamic engine is the higher-fidelity of the two.")
+
 
 def tab_phase1(p):
     st.markdown("### Phase-1 gate — can the effect even exist here?")

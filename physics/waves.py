@@ -78,5 +78,26 @@ class WaveField:
         return float(np.sum(self.amp * self.w * decay
                             * np.cos(self.w * t - self.k * x + self.phase)))
 
+    def kinematics_grid(self, t: np.ndarray, x: np.ndarray, z: np.ndarray):
+        """Airy wave kinematics (u,w velocity; ax,az acceleration) at fixed points (x_i,z_i)
+        over times t. Returns arrays shaped [n_t, n_pts]. Deep-water decay e^{k z}, z<=0.
+
+        u = sum a w e^{kz} cos(theta),  w = sum a w e^{kz} sin(theta),  theta = w t - k x + phi
+        ax = du/dt = -sum a w^2 e^{kz} sin(theta),  az = dw/dt = sum a w^2 e^{kz} cos(theta)
+        """
+        x = np.asarray(x)[None, :, None]           # [1, npts, 1]
+        z = np.asarray(z)[None, :, None]
+        tt = np.asarray(t)[:, None, None]          # [nt, 1, 1]
+        w = self.w[None, None, :]                  # [1,1,ncomp]
+        theta = w * tt - self.k[None, None, :] * x + self.phase[None, None, :]
+        decay = np.exp(self.k[None, None, :] * z)
+        aw = self.amp[None, None, :] * decay
+        cos, sin = np.cos(theta), np.sin(theta)
+        u = np.sum(aw * w * cos, axis=2)
+        ww = np.sum(aw * w * sin, axis=2)
+        ax = np.sum(-aw * w ** 2 * sin, axis=2)
+        az = np.sum(aw * w ** 2 * cos, axis=2)
+        return u, ww, ax, az
+
     def spectrum(self, f: np.ndarray) -> np.ndarray:
         return self._jonswap(f)

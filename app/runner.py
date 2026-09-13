@@ -74,6 +74,28 @@ def cached_comparison(p: dict):
 
 
 @st.cache_data(show_spinner=False)
+def cached_dynamic_cable(p: dict, viv: bool):
+    """Support sim + dynamic FE cable (Morison + bending + VIV) + hang-off fatigue vs quasi-static."""
+    from physics.cable_dynamic import run_dynamic_cable_from_sim, region_stress_from_dynamic
+    from physics.cable import region_stress_timeseries
+    from physics.fatigue import rainflow_damage
+    sim = run_case(make_config(p, enable_support=True), get_family(),
+                   make_fatigue(p), p["daf"], p["hangoff_stick"]).sim
+    dyn = run_dynamic_cable_from_sim(sim, viv=viv)
+    fp = make_fatigue(p)
+    m = sim.t >= sim.config.t_discard_s
+    win = float(sim.t[m][-1] - sim.t[m][0])
+    s_dyn = region_stress_from_dynamic(dyn, "hang_off", p["hangoff_stick"])
+    s_qs, _, _ = region_stress_timeseries(get_family(), "hang_off", sim.surge_m,
+                                          __import__("numpy").radians(sim.pitch_deg),
+                                          daf=p["daf"], hangoff_stick=p["hangoff_stick"])
+    D_dyn = rainflow_damage(s_dyn[m], win, fp).damage
+    D_qs = rainflow_damage(s_qs[m], win, fp).damage
+    return {"t": sim.t[m], "s_dyn": s_dyn[m], "s_qs": s_qs[m], "D_dyn": D_dyn, "D_qs": D_qs,
+            "viv": viv}
+
+
+@st.cache_data(show_spinner=False)
 def cached_annualize(p: dict):
     from analysis.annualize import annualized_life
     return annualized_life(make_config(p, enable_support=True, t_end=300.0),
