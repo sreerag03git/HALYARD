@@ -63,6 +63,9 @@ def tab_overview(p):
             ("Cable", "66 kV lazy-wave (representative)"),
         ], columns=["Quantity", "Value"]), hide_index=True, use_container_width=True)
         st.caption(f"Aero surface: {IEA15MW.aero.provenance[:78]}…")
+    st.markdown("**General arrangement — dimensioned elevation** (computed geometry)")
+    st.plotly_chart(drawings.general_arrangement(shape, REFERENCE_CABLE, VOLTURNUS_S),
+                    use_container_width=True)
 
 
 def tab_grid_control(p):

@@ -44,86 +44,116 @@ def _plane(z, xr, yr, color, opacity):
                       hoverinfo="skip")
 
 
+STEEL = "#7C8B99"        # platform steel
+STEEL_D = "#5E6B78"      # darker steel (pontoons/tower)
+NACELLE = "#4A5764"
+BLADE = "#EDEFF1"
+CABLE_BLACK = "#20242A"
+BUOY = "#E0A03A"
+
+
 def system_figure(shape: StaticShape, cable: DynamicCable, platform: Platform,
                   stress_along: np.ndarray | None = None,
                   color_label: str = "curvature (1/m)") -> go.Figure:
-    """Static 3-D system model with the cable coloured by curvature or stress."""
+    """Detailed, lit CAD-style 3-D model built entirely from the real computed geometry."""
+    from app import meshes as M
     depth = cable.water_depth_m
-    extent_x = (min(-80, shape.x.min() - 20), max(shape.x.max() + 20, 120))
-    extent_y = (-80, 80)
+    extent_x = (-110, shape.x.max() + 40)
+    extent_y = (-95, 95)
     fig = go.Figure()
 
-    # Water surface and seabed.
-    fig.add_trace(_plane(0.0, extent_x, extent_y, "#BFD3E6", 0.18))
-    fig.add_trace(_plane(-depth, extent_x, extent_y, "#D8CBB0", 0.35))
+    # Sea surface (semi-transparent) and seabed.
+    fig.add_trace(_plane(0.0, extent_x, extent_y, "#AEC6DE", 0.22))
+    fig.add_trace(_plane(-depth, extent_x, extent_y, "#C9BB9C", 0.55))
 
-    # Platform columns + pontoons.
     cols = _column_positions(platform)
-    R = platform.column_diameter_m / 2
-    for (cx, cy) in cols:
-        fig.add_trace(_cylinder(cx, cy, -platform.draft_m, platform.freeboard_m, R,
-                                color=ACCENT, opacity=0.55))
+    Rc = platform.column_diameter_m / 2
+    draft, fb = platform.draft_m, platform.freeboard_m
+    # Pontoons (submerged box beams from centre to each offset column).
     cx0, cy0 = cols[-1]
     for (cx, cy) in cols[:-1]:
-        fig.add_trace(go.Scatter3d(x=[cx0, cx], y=[cy0, cy],
-                                   z=[-platform.draft_m + 3, -platform.draft_m + 3],
-                                   mode="lines", line=dict(color=ACCENT, width=10),
-                                   hoverinfo="skip", showlegend=False))
+        yaw = np.arctan2(cy, cx)
+        length = np.hypot(cx, cy) - platform.column_diameter_m
+        fig.add_trace(M.box((cx0 + cx) / 2, (cy0 + cy) / 2, -draft + 3.5,
+                            length, platform.column_diameter_m * 0.9, 7.0,
+                            STEEL_D, yaw=yaw))
+    # Columns (solid lit cylinders).
+    for (cx, cy) in cols:
+        fig.add_trace(M.solid_cylinder(cx, cy, -draft, fb, Rc, STEEL, name="column"))
 
-    # Tower + rotor disc.
-    fig.add_trace(go.Scatter3d(x=[0, 0], y=[0, 0], z=[platform.freeboard_m, platform.hub_height_m],
-                               mode="lines", line=dict(color=GREY, width=8),
-                               hoverinfo="skip", showlegend=False, name="tower"))
-    disc_t = np.linspace(0, 2 * np.pi, 40)
-    Rrot = 120.0
-    fig.add_trace(go.Scatter3d(x=np.zeros_like(disc_t), y=Rrot * np.cos(disc_t),
-                               z=platform.hub_height_m + Rrot * np.sin(disc_t),
-                               mode="lines", line=dict(color=INK, width=3),
-                               hoverinfo="skip", name="rotor", showlegend=True))
+    # Transition piece + tapered tower + nacelle + hub + 3 blades.
+    hub_h = platform.hub_height_m
+    fig.add_trace(M.solid_cylinder(0, 0, fb, fb + 6, 5.5, STEEL_D))            # TP
+    fig.add_trace(M.cone((0, 0, hub_h), (0, 0, fb + 6), 5.0, STEEL_D))         # tapered tower
+    fig.add_trace(M.box(-4, 0, hub_h, 18, 8, 7, NACELLE, name="nacelle"))     # nacelle
+    fig.add_trace(M.cone((10, 0, hub_h), (2, 0, hub_h), 3.2, "#3A4450"))      # hub nose cone
+    Rrot = platform.column_diameter_m * 0 + 120.0
+    for az in (90.0, 210.0, 330.0):
+        fig.add_trace(M.blade_mesh((2, 0, hub_h), az, Rrot - 3, BLADE, name="blade"))
 
-    # Mooring lines (catenary) from fairleads to anchors.
+    # Mooring lines: 3-line catenary tubes from the offset-column fairleads (partial span
+    # shown for readability; real lines run ~800 m to the anchors).
     for (cx, cy) in cols[:-1]:
         ux, uy = cx / np.hypot(cx, cy), cy / np.hypot(cx, cy)
-        ax_, ay_ = cx + ux * 600, cy + uy * 600
-        s = np.linspace(0, 1, 30)
-        mx = cx + s * (ax_ - cx)
-        my = cy + s * (ay_ - cy)
-        mz = -platform.fairlead_depth_m + (-depth + platform.fairlead_depth_m) * (s ** 1.7)
-        fig.add_trace(go.Scatter3d(x=mx, y=my, z=mz, mode="lines",
-                                   line=dict(color=GREY, width=2), opacity=0.6,
-                                   hoverinfo="skip", showlegend=False))
+        s = np.linspace(0, 1, 40)
+        anx, any_ = cx + ux * 240, cy + uy * 240
+        mx = cx + s * (anx - cx); my = cy + s * (any_ - cy)
+        mz = -platform.fairlead_depth_m + (-depth + platform.fairlead_depth_m) * (s ** 2.2)
+        fig.add_trace(M.tube(np.column_stack([mx, my, mz]), 1.6, color="#556070", n=7))
 
-    # Dynamic lazy-wave cable, coloured along its length.
-    color = stress_along if stress_along is not None else shape.curvature
-    fig.add_trace(go.Scatter3d(
-        x=shape.x, y=np.zeros_like(shape.x), z=shape.z, mode="lines+markers",
-        line=dict(color=color, width=7, colorscale="Viridis",
-                  colorbar=dict(title=color_label, len=0.5, x=0.02)),
-        marker=dict(size=2, color=color, colorscale="Viridis", showscale=False),
-        name="dynamic cable"))
-
-    # Buoyancy modules (spheres) along the buoyancy section.
+    # Dynamic lazy-wave cable as a colored tube (curvature / stress heatmap).
+    inten = stress_along if stress_along is not None else shape.curvature
+    cab_pts = np.column_stack([shape.x, np.zeros_like(shape.x), shape.z])
+    fig.add_trace(M.tube(cab_pts, cable.outer_diameter_m * 6, intensity=np.asarray(inten),
+                         colorscale="Turbo", n=10, colorbar_title=color_label, name="cable",
+                         show=True))
+    # Bend stiffener (tapered cone) at the hang-off.
+    ho = cab_pts[1]
+    fig.add_trace(M.cone(tuple(cab_pts[3]), tuple(ho), 1.6, "#2B2F35"))
+    # Buoyancy modules (short cylinders straddling the cable in the buoyancy section).
     L = cable.total_length_m
     b0, b1 = cable.buoyancy_start_frac * L, cable.buoyancy_end_frac * L
     bmask = (shape.s >= b0) & (shape.s <= b1)
-    idx = np.where(bmask)[0][::3]
-    fig.add_trace(go.Scatter3d(x=shape.x[idx], y=np.zeros_like(idx), z=shape.z[idx],
-                               mode="markers", marker=dict(size=6, color=WARN, opacity=0.8),
-                               name="buoyancy modules"))
+    for i in np.where(bmask)[0][::2]:
+        fig.add_trace(M.solid_cylinder(shape.x[i], 0, shape.z[i] - 2.2, shape.z[i] + 2.2,
+                                       0.9, BUOY, n=12))
 
+    _dimension_annotations(fig, platform, cable, shape, depth)
+    _scene(fig, extent_x, extent_y, depth)
+    return fig
+
+
+def _dimension_annotations(fig, platform, cable, shape, depth):
+    hub_h = platform.hub_height_m
+    ann = [
+        (0, 0, hub_h + 128, "rotor Ø 240 m"),
+        (-70, 0, hub_h / 2, "hub 150 m"),
+        (0, 0, 8, "MSL"),
+        (shape.x.max() * 0.5, 0, -depth + 8, f"water depth {depth:.0f} m"),
+        (platform.column_spacing_m, 0, platform.freeboard_m + 4, "VolturnUS-S"),
+        (shape.x[1] + 6, 0, shape.z[1], "hang-off"),
+    ]
+    fig.add_trace(go.Scatter3d(
+        x=[a[0] for a in ann], y=[a[1] for a in ann], z=[a[2] for a in ann],
+        mode="text", text=[a[3] for a in ann],
+        textfont=dict(size=10, color=INK), hoverinfo="skip", showlegend=False))
+
+
+def _scene(fig, extent_x, extent_y, depth):
     fig.update_layout(
         scene=dict(
-            xaxis=dict(title="x (m)", backgroundcolor="rgba(0,0,0,0)", gridcolor=GRID_LINE),
-            yaxis=dict(title="y (m)", backgroundcolor="rgba(0,0,0,0)", gridcolor=GRID_LINE),
-            zaxis=dict(title="z (m)", backgroundcolor="rgba(0,0,0,0)", gridcolor=GRID_LINE),
-            aspectmode="data",
-            camera=dict(eye=dict(x=1.6, y=1.4, z=0.7)),
+            xaxis=dict(title="x (m)", backgroundcolor="rgba(0,0,0,0)", gridcolor=GRID_LINE,
+                       showspikes=False),
+            yaxis=dict(title="y (m)", backgroundcolor="rgba(0,0,0,0)", gridcolor=GRID_LINE,
+                       showspikes=False),
+            zaxis=dict(title="z (m)", backgroundcolor="rgba(0,0,0,0)", gridcolor=GRID_LINE,
+                       showspikes=False),
+            aspectmode="data", camera=dict(eye=dict(x=1.5, y=1.5, z=0.55),
+                                           up=dict(x=0, y=0, z=1)),
         ),
-        margin=dict(l=0, r=0, t=10, b=0), height=560,
-        paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(bgcolor="rgba(255,255,255,0.7)", bordercolor=GRID_LINE, borderwidth=1),
+        margin=dict(l=0, r=0, t=10, b=0), height=620, paper_bgcolor="rgba(0,0,0,0)",
+        legend=dict(bgcolor="rgba(255,255,255,0.75)", bordercolor=GRID_LINE, borderwidth=1),
     )
-    return fig
 
 
 # ---------------------------------------------------------------------------
