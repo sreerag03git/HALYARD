@@ -20,7 +20,7 @@ from physics.cable import (REGIONS, build_quasistatic_family, region_stress_time
 from physics.fatigue import FatigueParams, rainflow_damage
 
 from app import (dwg_arrangement, dwg_cable, dwg_diagrams, dwg_dlc, dwg_fatigue,
-                 dwg_mooring, viz3d_pro)
+                 dwg_mooring, dwg_nacelle, viz3d_pro)
 
 
 @pytest.fixture(scope="module")
@@ -80,6 +80,12 @@ def test_cable(shape):
 def test_mooring():
     _assert_ok(dwg_mooring.mooring_profile(VOLTURNUS_S), "mooring_profile", min_content=30)
     _assert_ok(dwg_mooring.restoring_curve(VOLTURNUS_S), "restoring_curve")
+    _assert_ok(dwg_mooring.mooring_plan(VOLTURNUS_S), "mooring_plan", min_content=30)
+
+
+def test_nacelle():
+    _assert_ok(dwg_nacelle.nacelle_cutaway(IEA15MW), "nacelle_cutaway", min_content=30)
+    _assert_ok(dwg_nacelle.nacelle_cutaway(), "nacelle_cutaway(default)", min_content=30)
 
 
 def test_diagrams():

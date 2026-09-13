@@ -1,6 +1,6 @@
-"""Station-keeping mooring drawings — catenary line make-up + restoring law (§8).
+"""Station-keeping mooring drawings — catenary line make-up + restoring law + plan (§8).
 
-Two engineering figures built from the frozen VolturnUS-S reference numbers:
+Three engineering figures built from the frozen VolturnUS-S reference numbers:
 
   * ``mooring_profile`` — dimensioned side elevation of ONE catenary mooring line
     from the fairlead (14 m below MSL on an offset column) down an analytic
@@ -12,6 +12,10 @@ Two engineering figures built from the frozen VolturnUS-S reference numbers:
   * ``restoring_curve`` — the horizontal restoring characteristic vs surge offset,
     from the documented linear surge stiffness k = rated_thrust / mean-offset, with
     a representative hardening overlay for context.
+  * ``mooring_plan`` — top-down station-keeping layout: the 3-line spread at 120 deg,
+    fairlead delta plates, anchors (foreshortened, bearing + radius annotated), the
+    mean-offset and watch circles, a drawn mooring schedule table, and angular /
+    radial dimensions.
 
 Segment diameters, lengths and MBL are representative station-keeping values
 (not a NREL-published mooring schedule) and are flagged as such on the drawing.
@@ -221,4 +225,158 @@ def restoring_curve(platform: Platform = VOLTURNUS_S) -> go.Figure:
         ytitle="horizontal restoring force (MN)", legend=True)
     fig.update_xaxes(range=[0, x.max()])
     fig.update_yaxes(range=[0, 1.05 * f_nl.max()])
+    return fig
+
+
+def _circle(fig: go.Figure, cx: float, cy: float, r: float, fill: str,
+            line: str = dk.BP_LINE, width: float = 1.2) -> None:
+    fig.add_shape(type="circle", x0=cx - r, y0=cy - r, x1=cx + r, y1=cy + r,
+                  line=dict(color=line, width=width), fillcolor=fill)
+
+
+def _beam(fig: go.Figure, x0: float, y0: float, x1: float, y1: float, width: float,
+          fill: str) -> None:
+    """Rectangular pontoon beam of the given width from (x0,y0) to (x1,y1)."""
+    dx, dy = x1 - x0, y1 - y0
+    L = math.hypot(dx, dy) + 1e-9
+    nx, ny = -dy / L * width / 2.0, dx / L * width / 2.0
+    fig.add_trace(go.Scatter(
+        x=[x0 + nx, x1 + nx, x1 - nx, x0 - nx, x0 + nx],
+        y=[y0 + ny, y1 + ny, y1 - ny, y0 - ny, y0 + ny],
+        mode="lines", fill="toself", fillcolor=fill,
+        line=dict(color=dk.BP_LINE, width=1.0), hoverinfo="skip", showlegend=False))
+
+
+def _schedule_table(fig: go.Figure, x0: float, y0: float, col_w, row_h: float,
+                    header, rows) -> None:
+    """A compact drawn table (header + rows) anchored with its top-left at (x0, y0)."""
+    ncol = len(col_w)
+    w = sum(col_w)
+    nrow = len(rows) + 1
+    y1 = y0 - nrow * row_h
+    fig.add_shape(type="rect", x0=x0, y0=y1, x1=x0 + w, y1=y0,
+                  line=dict(color=dk.BP_LINE, width=1.2), fillcolor="#FFFFFF")
+    # header separator + row lines
+    fig.add_shape(type="line", x0=x0, y0=y0 - row_h, x1=x0 + w, y1=y0 - row_h,
+                  line=dict(color=dk.BP_LINE, width=1.0))
+    for k in range(2, nrow):
+        yy = y0 - k * row_h
+        fig.add_shape(type="line", x0=x0, y0=yy, x1=x0 + w, y1=yy,
+                      line=dict(color=dk.BP_LINE, width=0.4))
+    cx = x0
+    for c in col_w[:-1]:
+        cx += c
+        fig.add_shape(type="line", x0=cx, y0=y1, x1=cx, y1=y0,
+                      line=dict(color=dk.BP_LINE, width=0.5))
+    for j, htxt in enumerate(header):
+        hx = x0 + sum(col_w[:j]) + col_w[j] / 2.0
+        fig.add_annotation(x=hx, y=y0 - row_h / 2.0, text=f"<b>{htxt}</b>", showarrow=False,
+                           font=dict(size=8, color=dk.BP_LINE))
+    for i, row in enumerate(rows):
+        ry = y0 - (i + 1.5) * row_h
+        for j, val in enumerate(row):
+            vx = x0 + sum(col_w[:j]) + col_w[j] / 2.0
+            fig.add_annotation(x=vx, y=ry, text=str(val), showarrow=False,
+                               font=dict(size=8, color=INK))
+
+
+def mooring_plan(platform: Platform = VOLTURNUS_S) -> go.Figure:
+    """Top-down mooring layout: 3-line spread, watch circles, anchors, schedule table."""
+    R = platform.column_spacing_m
+    Rc = platform.column_diameter_m / 2.0
+    angs = (0.0, 120.0, 240.0)
+    offsets = [(R * math.cos(math.radians(a)), R * math.sin(math.radians(a))) for a in angs]
+    moor_draw = 232.0                          # foreshortened drawn anchor radius
+    mean_off = platform.static_surge_at_rated_m           # 20 m
+    watch = 0.05 * platform.water_depth_m + mean_off      # representative max watch radius
+
+    xr = (-268.0, 272.0)
+    yr = (-268.0, 268.0)
+    dx = xr[1] - xr[0]
+    fig = go.Figure()
+    dk.blueprint_axes(fig, xr, yr, height=640, equal=True)
+
+    # --- watch circles (mean offset + max excursion) ----------------------
+    th = np.linspace(0.0, 2.0 * np.pi, 180)
+    for rad, col, lab in ((mean_off, ACCENT, f"mean offset {mean_off:.0f} m"),
+                          (watch, WARN, f"watch circle ≈{watch:.0f} m (repr.)")):
+        fig.add_trace(go.Scatter(x=rad * np.cos(th), y=rad * np.sin(th), mode="lines",
+                                 line=dict(color=col, width=1.1, dash="dot"),
+                                 hoverinfo="skip", showlegend=False))
+        fig.add_annotation(x=rad * math.cos(math.radians(45)),
+                           y=rad * math.sin(math.radians(45)) + 60.0, text=lab,
+                           showarrow=True, arrowhead=0, arrowcolor=col, arrowwidth=0.6,
+                           ax=0, ay=-18, font=dict(size=8, color=col),
+                           bgcolor="rgba(244,247,250,0.85)")
+
+    # --- column pitch circle + hull footprint -----------------------------
+    fig.add_trace(go.Scatter(x=R * np.cos(th), y=R * np.sin(th), mode="lines",
+                             line=dict(color=dk.BP_LINE, width=0.7, dash="dashdot"),
+                             hoverinfo="skip", showlegend=False))
+    for (ox, oy) in offsets:
+        _beam(fig, 0.0, 0.0, ox, oy, width=9.0, fill=dk.STEEL_D)
+    for (ox, oy) in offsets:
+        _circle(fig, ox, oy, Rc, dk.STEEL)
+    _circle(fig, 0.0, 0.0, Rc, dk.STEEL)
+
+    # --- 3-line mooring spread --------------------------------------------
+    for k, (a, (ox, oy)) in enumerate(zip(angs, offsets), start=1):
+        ux, uy = math.cos(math.radians(a)), math.sin(math.radians(a))
+        fx, fy = ox + ux * (Rc + 1.5), oy + uy * (Rc + 1.5)     # fairlead
+        nx, ny = -uy, ux
+        # fairlead delta plate
+        fig.add_trace(go.Scatter(
+            x=[fx + ux * 8, fx + nx * 4.5, fx - nx * 4.5, fx + ux * 8],
+            y=[fy + uy * 8, fy + ny * 4.5, fy - ny * 4.5, fy + uy * 8],
+            mode="lines", fill="toself", fillcolor=dk.STEEL_D,
+            line=dict(color=dk.BP_LINE, width=1.0), hoverinfo="skip", showlegend=False))
+        axp, ayp = ux * moor_draw, uy * moor_draw
+        fig.add_shape(type="line", x0=fx, y0=fy, x1=axp, y1=ayp,
+                      line=dict(color=dk.STEEL, width=1.6))
+        # break mark (foreshortening)
+        bx, by = 0.70 * moor_draw * ux, 0.70 * moor_draw * uy
+        fig.add_shape(type="line", x0=bx - 5 * nx - 4 * ux, y0=by - 5 * ny - 4 * uy,
+                      x1=bx + 5 * nx + 4 * ux, y1=by + 5 * ny + 4 * uy,
+                      line=dict(color=dk.BP_INK, width=1.0))
+        _draw_anchor(fig, axp, ayp)
+        fig.add_annotation(x=axp + 15.0 * ux, y=ayp + 15.0 * uy, text=f"<b>MA{k}</b>",
+                           showarrow=False, font=dict(size=9, color=dk.BP_INK),
+                           bgcolor="rgba(244,247,250,0.85)")
+        # line label near the fairlead
+        fig.add_annotation(x=fx + ux * 46, y=fy + uy * 46, text=f"ML{k}", showarrow=False,
+                           font=dict(size=10, color=dk.BP_INK), bgcolor="rgba(244,247,250,0.85)")
+
+    # --- dimensions -------------------------------------------------------
+    dk.dim_radial(fig, 0.0, 0.0, R, ang_deg=90.0, text=f"{R:.2f} m")
+    dk.dim_angular(fig, 0.0, 0.0, R * 0.55, a0_deg=0.0, a1_deg=120.0, text="120°")
+    dk.dim_angular(fig, 0.0, 0.0, R * 0.55, a0_deg=120.0, a1_deg=240.0, text="120°")
+    # anchor-radius dimension along ML1 (label lands mid-line, clear of centre)
+    fig.add_shape(type="line", x0=Rc, y0=0.0, x1=moor_draw, y1=0.0,
+                  line=dict(color=dk.BP_LINE, width=0.7, dash="dot"))
+    fig.add_annotation(x=0.5 * moor_draw, y=0.0, text=f"R ≈ {_ANCHOR_RADIUS_M:.0f} m (repr.)",
+                       showarrow=False, yshift=9, font=dict(size=8, color=dk.BP_INK),
+                       bgcolor="rgba(244,247,250,0.85)")
+
+    # --- mooring schedule table (lower-left) ------------------------------
+    rows = [(f"ML{k}", f"{a:.0f}°", f"{_PRETENSION_MN:.1f} MN",
+             f"{_TOP_CHAIN['mbl_mn']:.0f} MN") for k, a in enumerate(angs, start=1)]
+    _schedule_table(fig, x0=-42.0, y0=yr[0] + 118.0,
+                    col_w=[30.0, 30.0, 44.0, 34.0], row_h=16.0,
+                    header=("LINE", "BRG", "PRETEN.", "MBL"), rows=rows)
+
+    # --- furniture --------------------------------------------------------
+    dk.north_arrow(fig, x=xr[0] + 0.10 * dx, y=yr[1] - 0.20 * (yr[1] - yr[0]), size=34.0)
+    dk.frame(fig, xr, yr, zones=True)
+    dk.notes_block(fig, xr, yr, [
+        "Plan; dimensions in metres. 120° three-line spread.",
+        "Chain – polyester – chain make-up (see HAL-MOR-001).",
+        "Lines foreshortened to a break — real R ≈800 m (repr.).",
+        "Pretension / MBL representative (ASSUMPTIONS.md).",
+    ], corner="top-right")
+    dk.revision_table(fig, xr, yr, [("A", "issued — representative spread")])
+    dk.title_block(fig, xr, yr, title="MOORING LAYOUT — PLAN",
+                   subtitle="UMaine VolturnUS-S · 3 × catenary lines, 120° spread",
+                   dwg_no="HAL-MOR-002", scale="NTS", rev="A",
+                   extra="computed layout · R foreshortened")
+    dk.scale_bar(fig, x=xr[0] + 26.0, y=yr[0] + 26.0, length_m=100.0, n=4, unit="m")
     return fig

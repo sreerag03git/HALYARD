@@ -7,7 +7,7 @@ import streamlit as st
 
 from app import plotting, viz3d, viz3d_pro
 from app import (dwg_arrangement, dwg_cable, dwg_diagrams, dwg_dlc, dwg_fatigue,
-                 dwg_mooring)
+                 dwg_mooring, dwg_nacelle)
 from app.runner import (cached_case, cached_comparison, cached_phase1, cached_sweep,
                         get_family, make_fatigue)
 from app.theme import fidelity_tag, what_this_shows, GOOD, WARN
@@ -112,6 +112,12 @@ def tab_grid_control(p):
     st.caption("Closed-loop blade-pitch PI (KP=6, KI=2) with floating nacelle-velocity feedback "
                "(KF=0.05), generator-torque control, dynamic-inflow lag (4 s), and the synthetic-"
                "inertia + droop grid-support path injecting ΔP — the shaped recovery is the lever.")
+    st.markdown("**Rotor-nacelle assembly — drivetrain cutaway** (direct-drive, Type-4)")
+    st.plotly_chart(dwg_nacelle.nacelle_cutaway(IEA15MW), use_container_width=True)
+    st.caption("Longitudinal section of the direct-drive RNA: yaw bearing, tilted bedplate, single "
+               "main bearing, the large air-gap-diameter PM ring generator (no gearbox), hub with "
+               "three pitch bearings and spinner. Rating/rotor are frozen IEA-15MW values; "
+               "drivetrain dimensions are representative published values, to scale.")
 
 
 def tab_platform_cable(p):
@@ -190,6 +196,7 @@ def tab_platform_cable(p):
                    "indicates); the dynamic engine is the higher-fidelity of the two.")
 
     st.markdown("**Station-keeping & moorings**")
+    st.plotly_chart(dwg_mooring.mooring_plan(VOLTURNUS_S), use_container_width=True)
     mc1, mc2 = st.columns(2)
     mc1.plotly_chart(dwg_mooring.mooring_profile(VOLTURNUS_S), use_container_width=True)
     mc2.plotly_chart(dwg_mooring.restoring_curve(VOLTURNUS_S), use_container_width=True)
