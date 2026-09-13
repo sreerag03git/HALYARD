@@ -27,11 +27,13 @@ Turbine*, NREL/TP-5000-75698 (2020), and the public OpenFAST model.
 
 ### 1a. Rotor performance surfaces C_P(λ,β), C_T(λ,β) — **important provenance**
 
-The authoritative source is the public OpenFAST rotor-performance deck `Cp_Ct_Cq.txt`.
-**If that file is placed at `models/data/Cp_Ct_Cq.txt`, HALYARD loads it verbatim** and
-labels the surfaces high-fidelity.
+**The real IEA-15MW OpenFAST rotor-performance deck is now bundled** at
+`models/data/Cp_Ct_Cq.txt` (fetched from the public IEAWindTask37/IEA-15-240-RWT repo,
+36 pitch × 26 TSR) and is loaded verbatim and labelled high-fidelity. Verified against the
+anchors: **Cp_max = 0.47 at λ ≈ 8.5, rated thrust 2.46 MN (Ct = 0.79)**, with a steeper (more
+realistic) dCt/dλ than the calibrated fallback — a stronger rotor-speed → thrust coupling.
 
-When it is absent (clean clone), HALYARD builds **[representative]** reduced-order
+When the deck is absent, HALYARD builds **[representative]** reduced-order
 analytical surfaces and labels them as such everywhere (`AeroSurfaces.provenance`):
 - C_P: empirical Heier/Slootweg C_P(λ,β) form, affine-calibrated in tip-speed-ratio
   and amplitude to the published anchors **C_P,max = 0.489 at λ_opt = 9.0, β = 0**.

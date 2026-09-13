@@ -202,14 +202,14 @@ def _load_nrel_deck(path: str) -> AeroSurfaces:
 
     pitch = _find_vector("Pitch angle")
     tsr = _find_vector("TSR")
-    cp_mat = _find_matrix("Power coefficient", len(pitch))   # rows=pitch, cols=tsr
-    ct_mat = _find_matrix("Thrust coefficient", len(pitch))
-    # Store as (lambda, beta): transpose so axis0=TSR, axis1=pitch.
+    # The Cp/Ct blocks are (TSR rows x pitch columns) = (lambda x beta) directly.
+    cp_mat = _find_matrix("Power coefficient", len(tsr))
+    ct_mat = _find_matrix("Thrust coefficient", len(tsr))
     return AeroSurfaces(
         lambda_grid=np.asarray(tsr, float),
         beta_grid=np.asarray(pitch, float),
-        cp_table=np.asarray(cp_mat, float).T,
-        ct_table=np.asarray(ct_mat, float).T,
+        cp_table=np.asarray(cp_mat, float),      # [n_tsr, n_pitch] = [lambda, beta]
+        ct_table=np.asarray(ct_mat, float),
         provenance=("IEA-15-240-RWT OpenFAST rotor-performance deck (Cp_Ct_Cq.txt), "
                     "loaded verbatim from models/data/. HIGH-FIDELITY rotor map."),
     )

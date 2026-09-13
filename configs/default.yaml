@@ -3,12 +3,13 @@
 # reduces it (the sweet-spot branch). All Phase-1 thresholds are committed here.
 name: default
 description: >
-  Low-inertia (H=2.5 s) 50 Hz grid, calm sea (Hs 0.75 m), moderate loss-of-infeed with a
-  strong-but-compliant support response. Phase-1 passes; gentler recovery reduces hang-off
-  fatigue at a small AEP cost. Turbine IEA-15-240-RWT, platform VolturnUS-S (frozen refs).
+  Low-inertia (H=2.5 s) 50 Hz grid, moderate sea (Hs 1.0 m), loss-of-infeed with a strong-but-
+  grid-code-compliant support response. With the REAL IEA-15MW rotor deck + 6-DOF BEM hydro,
+  Phase-1 passes with a large added-fatigue fraction. Turbine IEA-15-240-RWT, platform
+  VolturnUS-S (frozen refs).
 
 grid:
-  H_sys_s: 2.0          # low-inertia (weak grid)
+  H_sys_s: 2.5          # low-inertia (weak grid)
   D_load: 1.0
   R_sys: 0.05
   T_gov_s: 8.0
@@ -17,10 +18,10 @@ grid:
   S_base_MW: 3000.0
 
 support:
-  H_wt_s: 12.0          # emulated synthetic inertia (control gain)
+  H_wt_s: 10.0          # emulated synthetic inertia (control gain)
   R_droop: 0.05
   deadband_hz: 0.015
-  dP_max: 0.20          # converter short-term overload headroom
+  dP_max: 0.15          # converter short-term overload headroom
   rate_pu_s: 0.50
   tau_s: 0.20
 
@@ -34,17 +35,17 @@ recovery:
 
 schedule:
   t_event_s: 100.0
-  support_window_s: 25.0
+  support_window_s: 20.0
 
 sim:
   wind_ms: 9.0          # below rated (blade pitch = 0), rotor has KE + aero headroom
-  Hs_m: 0.5             # very calm sea (regime where control matters vs 6-DOF wave motion)
+  Hs_m: 1.0             # moderate sea
   Tp_s: 8.0
   wave_seed: 1234
   t_end_s: 350.0
   dt_s: 0.025
   t_discard_s: 100.0
-  p_load_pu: 0.12       # loss of infeed (system pu)
+  p_load_pu: 0.10       # loss of infeed (system pu)
   wind_capacity_MW: 900.0   # supporting fleet (participation 0.30)
   beta_deg: 0.0
 
