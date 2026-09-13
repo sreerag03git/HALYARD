@@ -64,7 +64,33 @@ NREL/TP-5000-76773 (2020).
 | Fairlead depth | 14 m below MSL | [representative] typical for this hull |
 | System COG height | −1.0 m (near MSL) | [fitted/derived] mass-weighted from components |
 
-### 2a. Reduced-order 2-DOF (surge, pitch) motion model — **the fit, stated**
+### 2a. 6-DOF BEM hydrodynamics (DEFAULT engine) — `physics/hydro.py`
+
+The default platform engine is an **industry-standard potential-flow model**. The
+frequency-dependent added mass A(ω), radiation damping B(ω), and wave-excitation force RAOs
+X(ω, heading) are computed **offline** by a boundary-element (BEM) solve (Capytaine 3.0) on
+a 3168-panel VolturnUS-S hull mesh (4 columns + 3 pontoons), bundled as
+`models/data/volturnus_hydro.npz` (48 KB) and read by the live engine (no BEM at runtime).
+
+Time domain is the **Cummins equation** with a radiation-memory (retardation) convolution
+`K(t) = (2/π)∫B(ω)cos(ωt)dω` and infinite-frequency added mass from the BEM data. Details/
+choices:
+- BEM data used up to **ω ≤ 1.2 rad/s**; above that, irregular frequencies (no free-surface
+  lid) corrupt B(ω), so it is truncated and diagonal damping is clipped to ≥0 (passivity).
+  A lid re-run is the fuller fix (EXTENSIONS.md). **[representative processing]**
+- Hydrostatic restoring computed **analytically** (heave: ρg·A_wp; roll/pitch: ρg·I_wp +
+  W(z_B−z_G)); Capytaine's mesh hydrostatics returned 0 for this clipped mesh.
+- Mooring is a **linearized 3-line** model **[fitted]** so the 6-DOF natural periods match
+  published VolturnUS-S: **surge/sway 120.1 s, heave 19.2 s, roll/pitch 28.0 s, yaw 85.3 s**
+  (heave falls out of BEM + hydrostatics with no tuning — a strong validation). Verified in
+  a free-decay test and the Validation tab.
+- Mass matrix from the component masses/heights; moments of inertia are documented estimates
+  (platform radius of gyration 30 m). Wave excitation drives all 6 DOFs from the BEM RAOs.
+
+Limitations (deferred, EXTENSIONS.md): second-order slow-drift, nonlinear catenary mooring,
+frequency-dependent viscous drag, and the free-surface lid.
+
+### 2b. Reduced-order 2-DOF (surge, pitch) motion model — fast screening engine (the fit, stated)
 
 The spec permits fitting reduced coefficients to published dynamics. HALYARD anchors
 the two quantities that govern the fatigue mechanism and verifies the result:

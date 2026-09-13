@@ -102,7 +102,9 @@ def tab_platform_cable(p):
     case = cached_case(p, True)
     sim = case.sim
     a, b = st.columns(2)
-    a.plotly_chart(plotting.platform_plot(sim), use_container_width=True)
+    pplot = plotting.platform_6dof_plot(sim) if sim.heave_m is not None \
+        else plotting.platform_plot(sim)
+    a.plotly_chart(pplot, use_container_width=True)
     b.plotly_chart(plotting.stress_plot(case.t_count, case.stress_Pa), use_container_width=True)
     st.plotly_chart(drawings.lazywave_profile(fam.base_shape, REFERENCE_CABLE),
                     use_container_width=True)
@@ -338,6 +340,18 @@ def tab_validation(p):
         ("Static pitch @ rated (deg)", "~5.5", f"{pv['static_pitch_at_rated_deg']:.2f}"),
     ], columns=["Quantity", "Target (published)", "Fitted"]), hide_index=True,
         use_container_width=True)
+    st.markdown("**6-DOF hydrodynamics — BEM natural periods vs published VolturnUS-S**")
+    from physics.hydro import build_hydro_6dof
+    hy = build_hydro_6dof()
+    per = hy.natural_periods()
+    targets = {"surge": 120, "sway": 120, "heave": 20, "roll": 28, "pitch": 28, "yaw": 85}
+    st.dataframe(pd.DataFrame([{"DOF": k, "target (s)": targets[k], "model (s)": round(per[k], 1)}
+                               for k in ["surge", "sway", "heave", "roll", "pitch", "yaw"]]),
+                 hide_index=True, use_container_width=True)
+    st.caption("Potential-flow BEM (Capytaine) added mass / radiation damping / excitation RAOs "
+               "computed offline from the hull; Cummins time-domain with radiation memory. "
+               "Mooring fitted to the periods; heave falls out of BEM+hydrostatics untuned.")
+
     st.markdown("**Waves — JONSWAP realized Hs vs target**")
     st.dataframe(pd.DataFrame(val.wave_validation()).round(3), hide_index=True,
                  use_container_width=True)

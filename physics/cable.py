@@ -305,6 +305,7 @@ class QuasiStaticFamily:
     base_shape: StaticShape              # shape at dx = 0
     cable: DynamicCable
     shapes_xz: np.ndarray = None         # (n_dx, n_nodes+1, 2) full node positions vs dx
+    dT_top_dz: float = 0.0               # hang-off tension sensitivity to top vertical (heave) [N/m]
 
     def angle_at(self, dx: np.ndarray) -> np.ndarray:
         return np.interp(dx, self.dx, self.angle_deg)
@@ -351,6 +352,10 @@ def build_quasistatic_family(cable: DynamicCable | None = None,
     # sort by dx for interp
     idx = np.argsort(dxs)
     shapes_xz = np.array([np.column_stack([shapes[i].x, shapes[i].z]) for i in range(n)])[idx]
+    # Note: the quasi-static hang-off tension is ~insensitive to slow vertical (heave) top
+    # motion (~1 N/m) — the lazy-wave's buoyancy section geometrically decouples heave from
+    # tension by design. The DYNAMIC (heave-induced inertia/drag/snap) tension that drives
+    # fatigue is captured by the dynamic FE cable engine (physics/cable_dynamic.py), not here.
     return QuasiStaticFamily(dx=dxs[idx], angle_deg=angle[idx],
                              region_T={k: T[k][idx] for k in REGIONS},
                              region_kappa={k: K[k][idx] for k in REGIONS},

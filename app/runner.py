@@ -33,8 +33,10 @@ def make_config(p: dict, enable_support: bool = True,
     rp = recovery or RecoveryParams(kind="shaped", tau_rec_s=p["tau_rec"],
                                     rate_rec_pu_s=p["rate_rec"])
     return SimConfig(wind_ms=p["wind"], Hs_m=p["Hs"], Tp_s=p["Tp"], wave_seed=p["seed"],
-                     t_end_s=t_end or p["t_end"], dt_s=0.02, p_load_pu=p["p_load"],
+                     t_end_s=t_end or p["t_end"], dt_s=0.025, p_load_pu=p["p_load"],
                      wind_capacity_MW=p["wind_cap"], enable_support=enable_support,
+                     hydro_6dof=p.get("hydro_6dof", True),
+                     wave_heading_deg=p.get("wave_heading", 0.0),
                      grid=grid, support=support, recovery=rp, schedule=schedule)
 
 
@@ -109,11 +111,20 @@ def sidebar_inputs() -> dict:
                                float(b["sim"]["p_load_pu"]), 0.01)
 
     st.sidebar.markdown("**Sea state** — JONSWAP, seeded")
-    Hs = st.sidebar.slider("Significant wave height Hs (m)", 0.5, 5.0,
+    Hs = st.sidebar.slider("Significant wave height Hs (m)", 0.25, 5.0,
                            float(b["sim"]["Hs_m"]), 0.25)
     Tp = st.sidebar.slider("Peak period Tp (s)", 5.0, 16.0, float(b["sim"]["Tp_s"]), 0.5)
     wind = st.sidebar.slider("Wind speed (m/s, ≤ rated 10.59)", 6.0, 10.5,
                              float(b["sim"]["wind_ms"]), 0.5)
+    wave_heading = st.sidebar.slider("Wave heading (deg, 0 = wind-aligned)", 0.0, 90.0,
+                                     0.0, 15.0, help="Wind-wave misalignment (6-DOF engine).")
+
+    st.sidebar.markdown("**Hydrodynamics**")
+    hydro_engine = st.sidebar.radio(
+        "Platform engine", ["6-DOF BEM (Cummins)", "2-DOF fitted (fast)"], index=0,
+        help="6-DOF: potential-flow BEM (Capytaine) + radiation memory, validated to "
+             "VolturnUS-S natural periods. 2-DOF: fast fitted screening model.")
+    hydro_6dof = hydro_engine.startswith("6-DOF")
 
     st.sidebar.markdown("**Support** — grid-mandated, not shaped")
     dP_max = st.sidebar.slider("Support magnitude limit ΔP_max (pu)", 0.05, 0.25,
@@ -163,6 +174,7 @@ def sidebar_inputs() -> dict:
                   sigma_u=1400.0, mean_stress=mean_stress, DFF=DFF, daf=daf,
                   hangoff_stick=hangoff_stick, thr_added=thr_added, thr_recov=thr_recov,
                   thr_amp=thr_amp, seed=int(seed), t_end=float(t_end), wind_cap=float(wind_cap),
+                  hydro_6dof=hydro_6dof, wave_heading=wave_heading,
                   events_per_year=base.events_per_year, occurrence=base.sea_state_occurrence,
                   case_description=base.description)
     # Reproducibility: download the exact run configuration (§11).

@@ -83,6 +83,29 @@ def platform_plot(sim):
                                xtitle="time (s)", ytitle="surge (m)")
 
 
+def platform_6dof_plot(sim):
+    """All available platform DOFs (6-DOF engine): translations and rotations, two axes."""
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=sim.t, y=sim.surge_m, name="surge (m)",
+                             line=dict(color=ACCENT, width=1.6)))
+    if sim.heave_m is not None:
+        fig.add_trace(go.Scatter(x=sim.t, y=sim.heave_m, name="heave (m)",
+                                 line=dict(color="#2E6B4F", width=1.4)))
+    if sim.sway_m is not None and np.abs(sim.sway_m).max() > 1e-4:
+        fig.add_trace(go.Scatter(x=sim.t, y=sim.sway_m, name="sway (m)",
+                                 line=dict(color="#7FA8C9", width=1.2, dash="dot")))
+    fig.add_trace(go.Scatter(x=sim.t, y=sim.pitch_deg, name="pitch (deg)", yaxis="y2",
+                             line=dict(color=WARN, width=1.6)))
+    if sim.roll_deg is not None and np.abs(sim.roll_deg).max() > 1e-4:
+        fig.add_trace(go.Scatter(x=sim.t, y=sim.roll_deg, name="roll (deg)", yaxis="y2",
+                                 line=dict(color="#C98F3A", width=1.2, dash="dot")))
+    _mode_shading(fig, sim)
+    fig.update_layout(yaxis2=dict(title="rotation (deg)", overlaying="y", side="right",
+                                  showgrid=False))
+    return theme.plotly_layout(fig, "Floating-platform motion — 6-DOF (BEM Cummins hydro)",
+                               xtitle="time (s)", ytitle="translation (m)")
+
+
 def stress_plot(t, stress_by_region, focus="hang_off"):
     fig = go.Figure()
     for reg, sig in stress_by_region.items():
