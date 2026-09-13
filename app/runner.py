@@ -99,6 +99,14 @@ def cached_dynamic_cable(p: dict, viv: bool):
 
 
 @st.cache_data(show_spinner=False)
+def cached_dlc(p: dict):
+    from analysis.dlc import run_dlc
+    return run_dlc(make_config(p, enable_support=True), events_per_year=p["events_per_year"],
+                   family=get_family(), fatigue_params=make_fatigue(p), daf=p["daf"],
+                   hangoff_stick=p["hangoff_stick"], t_end=250.0)
+
+
+@st.cache_data(show_spinner=False)
 def cached_annualize(p: dict):
     from analysis.annualize import annualized_life
     return annualized_life(make_config(p, enable_support=True, t_end=300.0),

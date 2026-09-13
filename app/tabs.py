@@ -302,28 +302,30 @@ def tab_fatigue(p):
                "touchdown carry far less control-driven damage — the buoyancy section decouples "
                "them.")
 
-    st.markdown("**Annualized hang-off life across the sea-state scatter**")
+    st.markdown("**Annualized hang-off life — DLC matrix with multi-seed UQ**")
     st.markdown(what_this_shows(
-        "Extrapolates to a lifetime over a representative 7-bin JONSWAP scatter: continuous "
-        "wave fatigue by hours-in-bin, plus the control-added fatigue at the events/year rate. "
-        "Counting is per-bin on the combined signal (never summed)."), unsafe_allow_html=True)
-    if st.button("Compute annualized life across the scatter (14 cases)"):
-        st.session_state["_run_annual"] = True
-    if st.session_state.get("_run_annual"):
-        from app.runner import cached_annualize
-        with st.spinner("Running the sea-state scatter…"):
-            ar = cached_annualize(p)
+        "A reduced IEC-DLC-1.2-style fatigue matrix: wind speeds (Weibull-weighted) × a wind-"
+        "correlated sea state × wave headings × multiple seeds. Continuous wave fatigue by "
+        "hours-in-bin + control-added fatigue per event, on the combined signal. The band "
+        "combines seed-to-seed scatter and the S-N log-N scatter (5–95%)."),
+        unsafe_allow_html=True)
+    if st.button("Run the DLC fatigue matrix (offline, ~1–2 min)", type="primary"):
+        st.session_state["_run_dlc"] = True
+    if st.session_state.get("_run_dlc"):
+        from app.runner import cached_dlc
+        with st.spinner("Running the DLC matrix…"):
+            dl = cached_dlc(p)
         cc = st.columns(3)
-        cc[0].metric("Hang-off life (wave + control)",
-                     "∞" if not np.isfinite(ar.life_years) else f"{ar.life_years:,.0f} yr")
-        cc[1].metric("Hang-off life (wave only)",
-                     "∞" if not np.isfinite(ar.life_years_wave_only) else
-                     f"{ar.life_years_wave_only:,.0f} yr")
-        share = 100 * ar.event_annual_damage / ar.total_annual_damage if ar.total_annual_damage else 0
-        cc[2].metric("Control share of annual damage", f"{share:.1f}%")
-        rows = [dict(Hs=b.sea.Hs_m, Tp=b.sea.Tp_s, occ=b.sea.occurrence,
-                     D_wave=b.D_wave, D_support=b.D_support, added=b.added) for b in ar.bins]
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        cc[0].metric("Hang-off design life (mean)",
+                     "∞" if not np.isfinite(dl.life_years_mean) else f"{dl.life_years_mean:,.0f} yr")
+        cc[1].metric("5–95% band", f"{dl.life_years_lo:,.0f} – {dl.life_years_hi:,.0f} yr")
+        cc[2].metric("Control share of annual damage", f"{dl.control_share_pct:.1f}%")
+        st.dataframe(pd.DataFrame(dl.per_bin).round(
+            {"weight": 4, "D_wave_rate": 15, "D_added": 15}), hide_index=True,
+            use_container_width=True)
+        st.caption(f"{dl.n_cases} coupled simulations. The absolute life is calibrated to a "
+                   "~25 yr conventional design (representative lever); the CONTROL share and "
+                   "the Phase-1 added fraction are the robust results.")
 
 
 def tab_ingest(p):

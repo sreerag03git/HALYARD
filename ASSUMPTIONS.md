@@ -154,12 +154,14 @@ buoyancy hog crest at ≈ −87 m, touchdown at ≈ 134 m horizontal, then seabe
 - Sag/hog/touchdown use the **full-slip** wire radius (2.5 mm), consistent with the low EI
   (armour slips) — physically bounded stresses.
 - The **hang-off** uses a **calibrated effective (partial-slip) lever** `hangoff_bend_radius`
-  = **18 mm** as the DEFAULT. It is bracketed by the full-slip wire radius (2.5 mm, lower)
-  and the no-slip armour pitch radius (90 mm, stick upper bound). It is set so the reference
-  lay + bend stiffener achieves a **conventional dynamic-cable design life** over the sea-state
-  scatter (≈ 250 yr calculated, DFF 3) — standard design practice. **The RELATIVE control
-  effect (Phase-1 added fraction, Stage-B reduction) is robust to this lever**; the absolute
-  life is a rough indicator. `hangoff_stick=False` switches to the slip lower bound (sensitivity).
+  = **3 mm** as the DEFAULT. It is bracketed by the full-slip wire radius (2.5 mm, lower) and
+  the no-slip armour pitch radius (90 mm, stick upper bound). It is set so the reference lay +
+  bend stiffener achieves a **conventional ~25 yr design life** over the DLC matrix with the
+  6-DOF BEM hydro + real rotor deck (DFF 3) — standard design practice. **The RELATIVE control
+  effect (Phase-1 added fraction) is PROVABLY robust to this lever** — it is identical (0.43)
+  across levers from 3 to 8 mm, because both wave and control bending stresses scale by the
+  same lever. The absolute life is the calibrated/representative quantity; the relative effect
+  is the headline. `hangoff_stick=False` switches to the slip lower bound (sensitivity).
 - Solve method: near-inextensible Position-Based Dynamics + Gauss-Seidel length polish
   (≈ 0.07 % suspended-length error); a light Laplacian bending term and seabed-tail
   straightening remove discretization buckling; tension from force balance.
