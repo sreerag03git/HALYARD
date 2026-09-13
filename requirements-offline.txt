@@ -1,0 +1,4 @@
+# Offline-only tools (NOT needed at runtime / on Streamlit Cloud). Used to regenerate the
+# bundled hydrodynamic database via scripts/build_hydro_database.py. The live app reads the
+# pre-computed models/data/volturnus_hydro.npz with numpy alone.
+capytaine==3.0.0
