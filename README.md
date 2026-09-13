@@ -24,10 +24,19 @@ HALYARD is explicit about where every number comes from. Two engines exist and a
 
 | Engine | What it is | Label on every figure |
 |---|---|---|
-| **A — live reduced-order** | The physics in `physics/`, solved in real time inside Streamlit (swing-equation grid, synthetic-inertia/droop control, thrust–λ coupling, 2-DOF platform, lazy-wave cable, rainflow fatigue). | `reduced-order (live)` |
+| **A — live** | The physics in `physics/`, solved in real time inside Streamlit. | `reduced-order (live)` |
 | **B — ingested high-fidelity** | Precomputed OpenFAST / MoorDyn-with-EI / OrcaFlex time series uploaded as files, run through the same fatigue pipeline. | `high-fidelity (ingested)` |
 
-Reduced-order output is *never* presented as high-fidelity.
+The live engine has been developed toward industry-grade physics:
+
+- **Grid** — swing-equation SFR with a primary governor response and a filtered-RoCoF (PLL) state.
+- **Control** — synthetic-inertia + droop support and a shaped recovery lever; a **ROSCO-style blade-pitch controller** (with floating feedback) that extends operation above rated.
+- **Aerodynamics** — the **real IEA-15MW OpenFAST rotor deck** (Cp/Ct over pitch×TSR), relative-wind aero damping, a dynamic-inflow lag, and optional **Kaimal turbulent inflow**.
+- **Platform** — a **6-DOF potential-flow model**: added mass / radiation damping / excitation RAOs from a **boundary-element (Capytaine) solve** of the VolturnUS-S hull, run in the time domain via the **Cummins equation** with radiation memory; natural periods validated against the published values. (A fast fitted 2-DOF screening engine is also selectable.)
+- **Cable** — a quasi-static lazy-wave family *and* a **dynamic lumped-mass FE cable** (Morison hydro, bending, seabed friction, **VIV** wake oscillator) that computes the dynamic amplification self-consistently.
+- **Fatigue** — rainflow → mean-stress → S-N → Miner on the combined signal, with a **DLC matrix** (wind × sea-state × heading × seed) and **multi-seed + S-N-scatter confidence bands**.
+
+The BEM hydrodynamic database and the rotor deck are computed/collected **offline** and bundled; the live engine reads them (no OpenFAST/OrcaFlex/BEM at runtime). Reduced-order output is *never* presented as high-fidelity.
 
 ## Reference models (all public, frozen, read-only)
 
