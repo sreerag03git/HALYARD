@@ -164,7 +164,7 @@ def solve_static_shape(cable: DynamicCable, x_top: float | None = None,
     # (Jakobsen's rope method). Using updated positions within a sweep propagates the
     # correction along the chain in O(N) rather than Jacobi's O(N^2), so it converges the
     # inextensibility tightly in a few hundred sweeps (early stop on the worst segment).
-    r = _gauss_seidel_length(r, L0, w, top, anchor, depth, max_sweeps=600, tol=1e-3)
+    r = _gauss_seidel_length(r, L0, w, top, anchor, depth, max_sweeps=1500, tol=5e-4)
 
     # Straighten the seabed-laid tail: physically the slack cable lies straight on the flat
     # seabed from the touchdown to the anchor. The discrete solver otherwise folds the excess
@@ -194,26 +194,25 @@ def solve_static_shape(cable: DynamicCable, x_top: float | None = None,
 
 
 def _gauss_seidel_length(r: np.ndarray, L0: float, w: np.ndarray, top, anchor,
-                         depth: float, max_sweeps: int = 600, tol: float = 1e-3) -> np.ndarray:
-    """Forward-backward Gauss-Seidel projection of segment lengths to L0 (fixed ends)."""
+                         depth: float, max_sweeps: int = 400, tol: float = 1e-3) -> np.ndarray:
+    """Red-black (even/odd) vectorized distance-constraint projection to L0 (fixed ends).
+
+    Even and odd segments share no nodes, so each colour updates in parallel; alternating
+    them gives Gauss-Seidel-rate convergence with fully vectorized NumPy (fast), replacing a
+    slow per-node Python loop.
+    """
     N = len(r) - 1
+    even = np.arange(0, N, 2)
+    odd = np.arange(1, N, 2)
     for _ in range(max_sweeps):
-        for i in range(N):                      # forward sweep
-            d = r[i + 1] - r[i]
-            l = np.hypot(d[0], d[1]) + 1e-12
-            diff = (l - L0) / l
-            si = w[i] + w[i + 1]
-            if si > 0:
-                r[i] = r[i] + (w[i] / si) * diff * d
-                r[i + 1] = r[i + 1] - (w[i + 1] / si) * diff * d
-        for i in range(N - 1, -1, -1):          # backward sweep
-            d = r[i + 1] - r[i]
-            l = np.hypot(d[0], d[1]) + 1e-12
-            diff = (l - L0) / l
-            si = w[i] + w[i + 1]
-            if si > 0:
-                r[i] = r[i] + (w[i] / si) * diff * d
-                r[i + 1] = r[i + 1] - (w[i + 1] / si) * diff * d
+        for S in (even, odd):
+            i, j = S, S + 1
+            d = r[j] - r[i]
+            l = np.sqrt((d ** 2).sum(axis=1)) + 1e-12
+            corr = ((l - L0) / l)[:, None] * d
+            sden = (w[i] + w[j])[:, None] + 1e-12
+            r[i] = r[i] + (w[i][:, None] / sden) * corr
+            r[j] = r[j] - (w[j][:, None] / sden) * corr
         r[0] = top
         r[-1] = anchor
         np.maximum(r[:, 1], -depth, out=r[:, 1])

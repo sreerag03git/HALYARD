@@ -71,8 +71,8 @@ def case_from_dict(d: dict) -> Case:
     s = d.get("sim", {})
     sim = SimConfig(
         wind_ms=s.get("wind_ms", 9.0), Hs_m=s.get("Hs_m", 2.0), Tp_s=s.get("Tp_s", 8.0),
-        wave_seed=s.get("wave_seed", 1234), t_end_s=s.get("t_end_s", 500.0),
-        dt_s=s.get("dt_s", 0.02), t_discard_s=s.get("t_discard_s", 100.0),
+        wave_seed=s.get("wave_seed", 1234), t_end_s=s.get("t_end_s", 350.0),
+        dt_s=s.get("dt_s", 0.025), t_discard_s=s.get("t_discard_s", 100.0),
         p_load_pu=s.get("p_load_pu", 0.10), wind_capacity_MW=s.get("wind_capacity_MW", 900.0),
         enable_support=s.get("enable_support", True), beta_deg=s.get("beta_deg", 0.0),
         grid=grid, support=support, recovery=recovery, schedule=schedule)

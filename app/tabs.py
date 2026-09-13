@@ -205,11 +205,6 @@ def tab_comparison(p):
         "No support vs the cited incumbent recovery vs HALYARD's shaped recovery, same wave seed. "
         "The equivalence gate must pass FIRST (both meet the grid code); only then is the fatigue "
         "comparison valid."), unsafe_allow_html=True)
-    if st.button("Run three-controller comparison", type="primary"):
-        st.session_state["_run_cmp"] = True
-    if not st.session_state.get("_run_cmp"):
-        st.caption("Press to run (three coupled simulations; cached afterwards).")
-        return
     with st.spinner("Running three controllers…"):
         cmp = cached_comparison(p)
     if cmp.equivalent:

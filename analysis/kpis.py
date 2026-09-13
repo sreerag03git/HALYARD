@@ -113,9 +113,17 @@ def aep_penalty_fraction(r_support: SimResult, r_baseline: SimResult) -> float:
     t = r_support.t
     V = r_support.config.wind_ms
     beta = r_support.config.beta_deg
-    # Aerodynamic power actually captured along each rotor trajectory.
-    Pa_sup = np.array([aero_power_W(tb, w, V, beta) for w in r_support.omega_rads])
-    Pa_base = np.array([aero_power_W(tb, w, V, beta) for w in r_baseline.omega_rads])
+    # Aerodynamic power captured along each rotor trajectory (vectorized via a 1-D Cp table).
+    lam_tab = np.linspace(0.3, 20.0, 2000)
+    cp_tab = np.array([tb.aero.cp(l, beta) for l in lam_tab])
+    R, A = tb.rotor_radius_m, tb.rotor_area_m2
+
+    def _pa(omega):
+        lam = omega * R / V
+        return 0.5 * 1.225 * A * np.interp(lam, lam_tab, cp_tab) * V ** 3
+
+    Pa_sup = _pa(r_support.omega_rads)
+    Pa_base = _pa(r_baseline.omega_rads)
     mask = t >= r_support.config.schedule.t_event_s
     lost = np.trapezoid(Pa_base[mask] - Pa_sup[mask], t[mask])
     captured = np.trapezoid(Pa_base[mask], t[mask])

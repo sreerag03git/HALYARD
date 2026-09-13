@@ -39,8 +39,8 @@ class SimConfig:
     Hs_m: float = 2.5
     Tp_s: float = 8.0
     wave_seed: int = 1234
-    t_end_s: float = 700.0
-    dt_s: float = 0.02
+    t_end_s: float = 350.0
+    dt_s: float = 0.025
     t_discard_s: float = 100.0          # warm-up discarded before fatigue counting
     p_load_pu: float = 0.10             # generation-loss step (system pu)
     wind_capacity_MW: float = 900.0     # fleet capacity providing identical support
@@ -131,7 +131,19 @@ def run_simulation(cfg: SimConfig, turbine: Turbine | None = None,
     y[S_X] = x0
     y[S_THETA] = th0
 
-    def rhs(t: float, y: np.ndarray, F_wave: np.ndarray) -> np.ndarray:
+    # Scalar constants for the allocation-free hot loop.
+    m00, m01, m10, m11 = Minv[0, 0], Minv[0, 1], Minv[1, 0], Minv[1, 1]
+    B00, B01, B10, B11 = B[0, 0], B[0, 1], B[1, 0], B[1, 1]
+    C00, C01, C10, C11 = C[0, 0], C[0, 1], C[1, 0], C[1, 1]
+    g = cfg.grid
+    g2H, gD, gR, gTg, gRes, gTr, gf0 = (2.0 * g.H_sys_s, g.D_load, g.R_sys, g.T_gov_s,
+                                        g.reserve_pu, g.T_rocof_s, g.f0_Hz)
+    tau_sup = cfg.support.tau_s
+    _P_pre, _rated = ctl.P_pre, tb.rated_power_W
+    t_event = cfg.schedule.t_event_s
+    enable = cfg.enable_support
+
+    def rhs(t: float, y: np.ndarray, fw_s: float, fw_p: float) -> np.ndarray:
         df, pgov, rocof_meas = y[S_DF], y[S_PGOV], y[S_ROCOF]
         omega = y[S_OMEGA]
         dP_ctrl = y[S_DPCTRL]
@@ -141,28 +153,34 @@ def run_simulation(cfg: SimConfig, turbine: Turbine | None = None,
         P_elec = ctl.elec_power_W(omega, dP_ctrl)
         F_thrust = _thrust(omega, v_nac)
 
-        # Grid: aggregate wind support (only if enabled) + the load-loss step.
-        if cfg.enable_support:
-            p_wind = participation * ctl.delta_wind_pu(omega, dP_ctrl)
-            p_load = cfg.p_load_pu if t >= cfg.schedule.t_event_s else 0.0
+        # Grid (inlined scalar SFR): aggregate wind support + the load-loss step.
+        if enable:
+            p_wind = participation * (P_elec - _P_pre) / _rated
+            p_load = cfg.p_load_pu if t >= t_event else 0.0
         else:
             p_wind = 0.0
             p_load = 0.0
-        dgrid, _ = cfg.grid.rhs(y[S_DF:S_ROCOF + 1], p_wind, p_load)
+        ddf = (pgov + p_wind - p_load - gD * df) / g2H
+        rocof_true = gf0 * ddf
+        dpgov = (-(1.0 / gR) * df - pgov) / gTg
+        if (pgov >= gRes and dpgov > 0) or (pgov <= -gRes and dpgov < 0):
+            dpgov = 0.0
+        drocof = (rocof_true - rocof_meas) / gTr
 
         d = np.empty(N_STATES)
-        d[S_DF:S_ROCOF + 1] = dgrid
+        d[S_DF] = ddf
+        d[S_PGOV] = dpgov
+        d[S_ROCOF] = drocof
         d[S_OMEGA] = _domega(omega, v_nac, P_elec)
         d[S_DPCTRL] = (ctl.ddP_ctrl(dP_ctrl, df, rocof_meas, omega)
-                       if cfg.enable_support else -dP_ctrl / cfg.support.tau_s)
-        q = np.array([x, theta])
-        qdot = np.array([xdot, thdot])
-        F_ext = np.array([F_thrust, F_thrust * z_hub]) + F_wave
-        acc = Minv @ (F_ext - B @ qdot - C @ q)
+                       if enable else -dP_ctrl / tau_sup)
+        # Platform 2-DOF, scalar: acc = Minv (F_ext - B qdot - C q).
+        rx = F_thrust + fw_s - (B00 * xdot + B01 * thdot) - (C00 * x + C01 * theta)
+        rt = F_thrust * z_hub + fw_p - (B10 * xdot + B11 * thdot) - (C10 * x + C11 * theta)
         d[S_X] = xdot
-        d[S_XDOT] = acc[0]
+        d[S_XDOT] = m00 * rx + m01 * rt
         d[S_THETA] = thdot
-        d[S_THETADOT] = acc[1]
+        d[S_THETADOT] = m10 * rx + m11 * rt
         return d
 
     # Fixed-step RK4 with per-step mode update. Wave forces indexed on the half-step grid:
@@ -173,16 +191,16 @@ def run_simulation(cfg: SimConfig, turbine: Turbine | None = None,
     Y[0] = y
     for i in range(1, n):
         t = ts[i - 1]
-        Fw1 = np.array([Fw_surge[i - 1], Fw_pitch[i - 1]])
-        Fw4 = np.array([Fw_surge[i], Fw_pitch[i]])
-        Fw2 = 0.5 * (Fw1 + Fw4)
-        if cfg.enable_support:
+        fs1, fp1 = Fw_surge[i - 1], Fw_pitch[i - 1]
+        fs4, fp4 = Fw_surge[i], Fw_pitch[i]
+        fs2, fp2 = 0.5 * (fs1 + fs4), 0.5 * (fp1 + fp4)
+        if enable:
             ctl.update_mode(t, y[S_DF], y[S_OMEGA])
         modes[i - 1] = ctl.mode
-        k1 = rhs(t, y, Fw1)
-        k2 = rhs(t + 0.5 * dt, y + 0.5 * dt * k1, Fw2)
-        k3 = rhs(t + 0.5 * dt, y + 0.5 * dt * k2, Fw2)
-        k4 = rhs(t + dt, y + dt * k3, Fw4)
+        k1 = rhs(t, y, fs1, fp1)
+        k2 = rhs(t + 0.5 * dt, y + 0.5 * dt * k1, fs2, fp2)
+        k3 = rhs(t + 0.5 * dt, y + 0.5 * dt * k2, fs2, fp2)
+        k4 = rhs(t + dt, y + dt * k3, fs4, fp4)
         y = y + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
         Y[i] = y
     modes[-1] = ctl.mode

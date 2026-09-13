@@ -74,7 +74,7 @@ def cached_comparison(p: dict):
 @st.cache_data(show_spinner=False)
 def cached_annualize(p: dict):
     from analysis.annualize import annualized_life
-    return annualized_life(make_config(p, enable_support=True, t_end=360.0),
+    return annualized_life(make_config(p, enable_support=True, t_end=300.0),
                            events_per_year=p["events_per_year"], family=get_family(),
                            fatigue_params=make_fatigue(p), daf=p["daf"],
                            hangoff_stick=p["hangoff_stick"])
@@ -84,7 +84,7 @@ def cached_annualize(p: dict):
 def cached_sweep(p: dict):
     # Stage A is an explicit offline optimiser: a compact 4x3 recovery grid at a shorter
     # duration keeps it responsive while still resolving the trade-off and Pareto front.
-    return run_sweep(make_config(p, enable_support=True, t_end=360.0),
+    return run_sweep(make_config(p, enable_support=True, t_end=300.0),
                      tau_values=[3.0, 10.0, 20.0, 30.0],
                      rate_values=[0.02, 0.06, 0.15],
                      family=get_family(), fatigue_params=make_fatigue(p), daf=p["daf"],
@@ -150,7 +150,7 @@ def sidebar_inputs() -> dict:
 
     with st.sidebar.expander("Advanced / reproducibility"):
         seed = st.number_input("Wave seed", 0, 99999, int(b["sim"]["wave_seed"]))
-        t_end = st.slider("Simulation length (s)", 300, 700, int(b["sim"]["t_end_s"]), 50)
+        t_end = st.slider("Simulation length (s)", 250, 600, int(b["sim"]["t_end_s"]), 50)
         S_base = st.number_input("System base (MW)", 500.0, 30000.0,
                                  float(b["grid"]["S_base_MW"]), 500.0)
         wind_cap = st.number_input("Supporting wind capacity (MW)", 100.0, 5000.0,

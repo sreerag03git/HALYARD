@@ -41,8 +41,8 @@ sim:
   Hs_m: 0.75            # calm, frequent sea state
   Tp_s: 8.0
   wave_seed: 1234
-  t_end_s: 500.0
-  dt_s: 0.02
+  t_end_s: 350.0
+  dt_s: 0.025
   t_discard_s: 100.0
   p_load_pu: 0.10       # loss of infeed (system pu)
   wind_capacity_MW: 900.0   # supporting fleet (participation 0.30)
