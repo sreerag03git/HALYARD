@@ -15,16 +15,19 @@ fidelity of this study (§5.6):
     sigma(t) = E_steel * r_bend * kappa(t)  +  T(t) / A_armour
 where r_bend is a bending lever arm and A_armour the total armour steel area.
 
-Choice of r_bend (slip vs no-slip) — this matters:
-* Default **slip regime** uses the individual armour-wire radius (r_wire ~ 2.5 mm). This
-  is consistent with the cable's LOW bending stiffness (EI = 25 kN m^2 is ~100x below the
-  fully-bonded E_steel*I_armour), which proves the armour wires slip; the cyclic stress is
-  then dominated by each wire bending about its own axis, ~ E_steel * r_wire * kappa. This
-  yields physically bounded stresses (a fully-bonded R_armour lever would predict >UTS
-  stresses at the hog and is unphysical for a flexible dynamic cable).
-* The **no-slip / stick** bound uses the armour pitch radius R_armour and is offered as a
-  higher-fidelity toggle for the hang-off (where high tension can cause stick, the reason
-  hang-offs are fatigue-critical). See EXTENSIONS.md.
+Choice of r_bend (three-tier bracket) — this matters. The cyclic bending stress scales with
+the effective bending lever r_bend, and the armour's true slip state sits between two bounds:
+* **Full-slip LOWER bound** — the individual armour-wire radius (r_wire ~ 2.5 mm). Consistent
+  with the cable's LOW bending stiffness (EI = 25 kN m^2 is ~100x below the fully-bonded
+  E_steel*I_armour), which shows the wires slip; each wire then bends about its own axis,
+  ~ E_steel * r_wire * kappa. Used for the lower-tension sag/hog/touchdown regions.
+* **No-slip / stick UPPER bound** — the armour pitch radius R_armour (~90 mm). Physical only
+  where high tension locks the armour; a fully-bonded lever predicts >UTS stresses at the hog
+  and is unphysical for the flexible free cable. Offered as a sensitivity bound (EXTENSIONS.md).
+* **Calibrated hang-off DEFAULT** — a partial-slip lever ``hangoff_bend_radius_m`` (~3 mm),
+  bracketed by the two bounds above and set so the reference lay achieves a conventional
+  design life over the DLC matrix (standard practice). This is what ``hangoff_stick=True``
+  (the default) selects for the hang-off — NOT the raw 90 mm pitch radius. See ASSUMPTIONS.md §3.
 
 Assumptions: full tension sharing by the armour, single equivalent wire radius, no explicit
 inter-wire friction model. Flagged in ASSUMPTIONS.md.

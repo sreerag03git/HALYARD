@@ -145,8 +145,8 @@ buoyancy hog crest at ≈ −87 m, touchdown at ≈ 134 m horizontal, then seabe
 | Axial stiffness EA | 400 MN | typical dynamic-cable value |
 | Bending stiffness EI | 25 kN·m² | flexible dynamic cable |
 | Operational MBR | 3.5 m | curvature limit 0.286 1/m |
-| Total suspended length | 320 m | gives lazy-wave slack |
-| Hang-off → anchor horizontal | 180 m | design layout |
+| Total suspended length | 310 m | gives lazy-wave slack |
+| Hang-off → anchor horizontal | 165 m | design layout |
 | Buoyancy section | 42–62 % of length | creates the hog |
 | Buoyancy net uplift | 1.6 × bare submerged wt | gentle hog, no surface breach |
 
@@ -158,10 +158,13 @@ buoyancy hog crest at ≈ −87 m, touchdown at ≈ 134 m horizontal, then seabe
   the no-slip armour pitch radius (90 mm, stick upper bound). It is set so the reference lay +
   bend stiffener achieves a **conventional ~25 yr design life** over the DLC matrix with the
   6-DOF BEM hydro + real rotor deck (DFF 3) — standard design practice. **The RELATIVE control
-  effect (Phase-1 added fraction) is PROVABLY robust to this lever** — it is identical (0.43)
-  across levers from 3 to 8 mm, because both wave and control bending stresses scale by the
-  same lever. The absolute life is the calibrated/representative quantity; the relative effect
-  is the headline. `hangoff_stick=False` switches to the slip lower bound (sensitivity).
+  effect (Phase-1 added fraction) is PROVABLY robust to this lever** — it is essentially
+  identical across levers from 3 to 8 mm, because both wave and control bending stresses scale
+  by the same lever, so the lever cancels in the ratio. Its VALUE is scenario-dependent (≈0.30
+  for the default SimConfig; larger for weaker grids / stronger support / calmer seas, and it
+  can fall below the Phase-1 threshold — a NEGLIGIBLE verdict), not a fixed number. The absolute
+  life is the calibrated/representative quantity; the lever-robust relative effect is the
+  headline. `hangoff_stick=False` switches to the slip lower bound (sensitivity).
 - Solve method: near-inextensible Position-Based Dynamics + Gauss-Seidel length polish
   (≈ 0.07 % suspended-length error); a light Laplacian bending term and seabed-tail
   straightening remove discretization buckling; tension from force balance.

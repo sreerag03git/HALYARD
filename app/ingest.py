@@ -77,7 +77,13 @@ def run_ingested(df: pd.DataFrame, family: QuasiStaticFamily | None = None,
         c = family.cable
         kappa = df["curvature_hangoff"].to_numpy(float)
         T = df["tension_hangoff"].to_numpy(float)
-        r_bend = c.armour_pitch_radius_m if hangoff_stick else c.armour_wire_radius_m
+        # Use the SAME hang-off bending lever as the live engine and path A
+        # (physics.cable.region_stress_timeseries): the calibrated partial-slip
+        # value for stick=True, the full-slip wire radius otherwise. Using the
+        # armour PITCH radius (the no-slip UPPER BOUND) here would overstate the
+        # ingested hang-off fatigue by ~(pitch/lever)^m and put engine B on a
+        # different scale than every other number in the app.
+        r_bend = c.hangoff_bend_radius_m if hangoff_stick else c.armour_wire_radius_m
         sigma = c.E_steel_Pa * r_bend * kappa + T / c.armour_area_m2
 
     fat = rainflow_damage(sigma[mask], window_s, fp)

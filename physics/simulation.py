@@ -113,7 +113,7 @@ def _run_2dof(cfg: SimConfig, turbine: Turbine | None = None,
     # Steady operating point and pre-event baseline power.
     omega0, P0 = aero.steady_operating_point(tb, cfg.wind_ms, cfg.beta_deg)
     ctl = FrequencyController(tb, cfg.support, cfg.recovery, cfg.schedule,
-                              cfg.wind_ms, omega0, P0)
+                              cfg.wind_ms, omega0, P0, f0_hz=cfg.grid.f0_Hz)
 
     participation = load_participation(cfg.wind_capacity_MW, cfg.grid)
     Minv = np.linalg.inv(model.M)
@@ -301,7 +301,7 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
 
     omega0, P0 = aero.steady_operating_point(tb, cfg.wind_ms, cfg.beta_deg)
     ctl = FrequencyController(tb, cfg.support, cfg.recovery, cfg.schedule,
-                              cfg.wind_ms, omega0, P0)
+                              cfg.wind_ms, omega0, P0, f0_hz=cfg.grid.f0_Hz)
     participation = load_participation(cfg.wind_capacity_MW, cfg.grid)
     z_hub = tb.hub_height_m
 
@@ -354,7 +354,11 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
     om_rated = tb.omega_rated_rads
     pitch_on = cfg.blade_pitch
     KP_P, KI_P = 6.0, 2.0            # PI gains on rotor-speed error (rad per rad/s)
-    KF_P = 0.05                      # floating (nacelle-velocity) feedback gain
+    KF_P = 0.60                      # floating (nacelle fore-aft velocity) feedback gain —
+                                     # raised from 0.05 to add positive aerodynamic damping to
+                                     # the platform-pitch mode (removes the near-rated control-
+                                     # structure limit cycle flagged in the physics audit).
+    BETA_K = np.radians(6.3)         # ROSCO gain-scheduling knee (blade-pitch sensitivity)
     BETA_MAX = np.radians(25.0)
     PITCH_RATE = np.radians(8.0)     # actuator rate limit [rad/s]
     TAU_PITCH = 0.10                 # actuator lag [s]
@@ -396,9 +400,13 @@ def _run_6dof(cfg: SimConfig, turbine: Turbine | None = None) -> SimResult:
         if (pgov >= gRes and dpgov > 0) or (pgov <= -gRes and dpgov < 0):
             dpgov = 0.0
         drocof = (gf0 * ddf - rocof_meas) / gTr
-        # Pitch controller (PI on omega error above rated + floating feedback).
+        # Pitch controller (PI on omega error above rated + floating feedback), with
+        # ROSCO-style gain scheduling: the blade-pitch sensitivity dCp/dbeta grows with beta,
+        # so the PI gains are detuned as 1/(1+beta/BETA_K) to keep the loop stable across the
+        # operating envelope.
         e = omega - om_rated
-        beta_cmd = KP_P * e + KI_P * I_p + KF_P * v_nac
+        gs = 1.0 / (1.0 + max(beta, 0.0) / BETA_K)
+        beta_cmd = gs * (KP_P * e + KI_P * I_p) + KF_P * v_nac
         beta_cmd = min(max(beta_cmd, 0.0), BETA_MAX)
         saturated = (beta_cmd <= 0.0 and e < 0) or (beta_cmd >= BETA_MAX and e > 0)
         dI = 0.0 if (not pitch_on or saturated) else e

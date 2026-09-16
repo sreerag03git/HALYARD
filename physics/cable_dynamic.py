@@ -15,9 +15,11 @@ driven at the top by the platform fairlead motion (surge, heave, pitch → hang-
 with a clamped bend-stiffener BC that rotates with platform pitch). Inextensibility is
 enforced by red-black distance-constraint projection (position-based dynamics), which keeps
 the scheme stable at the simulation time step without resolving the stiff axial wave. Tension
-is recovered by inverse dynamics (force balance including inertia) — so the DYNAMIC tension
-(heave/inertia/drag/snap tendency), not just the quasi-static value, reaches the fatigue
-pipeline. One-way coupling (platform → cable) as before.
+is recovered as the quasi-static catenary force balance (T = sqrt(H^2 + V^2)) evaluated on the
+DYNAMICALLY-MOVING geometry — so it captures geometry-driven dynamic tension (the shape's
+inertia/drag response feeds back through the node positions), but NOT direct nodal inertial or
+snap-load terms; a true dynamic-tension recovery (nodal m*a + drag reaction) is left to
+EXTENSIONS.md. One-way coupling (platform → cable) as before.
 """
 from __future__ import annotations
 
@@ -206,9 +208,18 @@ def solve_dynamic_cable(cable: DynamicCable, t: np.ndarray, surge, heave, pitch_
         ang_seg = np.arctan2(seg[:, 1], seg[:, 0])
         dang = np.diff(np.unwrap(ang_seg))
         seglen = np.hypot(seg[:, 0], seg[:, 1])
+        mean_len = 0.5 * (seglen[:-1] + seglen[1:]) + 1e-9
         kappa = np.zeros(N + 1)
-        kappa[1:-1] = np.abs(dang) / (0.5 * (seglen[:-1] + seglen[1:]) + 1e-9)
-        kappa[reg["hang_off"]] += abs(pitch_dev[it]) / BEND_STIFFENER_LEN_M
+        kappa[1:-1] = np.abs(dang) / mean_len
+        # Hang-off: SIGNED stiffener curvature. The first segment is pinned to the platform-
+        # rotated stiffener axis (see pin()), so the signed turn there already carries the
+        # (natural-departure - platform-pitch) relative rotation of the disclosed model
+        # kappa_stiff=(d_alpha - d_pitch)/L. Keep it signed (not |.|) and do NOT add a
+        # separate |pitch| term (that both double-counted the pinned rotation and rectified
+        # the bending stress to twice the pitch frequency); this matches the quasi-static
+        # engine's signed convention so the hang-off bending reverses about its mean.
+        h = reg["hang_off"]
+        kappa[h] = dang[h - 1] / mean_len[h - 1]
         td = _touchdown_index(r, depth)
         Tnode = _tension_from_geometry(r, node_wt, td)   # dynamic geometry -> dynamic tension
         for k in REGIONS:

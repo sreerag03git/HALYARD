@@ -45,6 +45,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from models.iea15mw import Turbine
+from physics.constants import F0_HZ
 
 
 # --- Modes ------------------------------------------------------------------
@@ -114,7 +115,8 @@ class FrequencyController:
 
     def __init__(self, turbine: Turbine, support: SupportParams,
                  recovery: RecoveryParams, schedule: EventSchedule,
-                 wind_ms: float, omega_setpoint_rads: float, P_baseline_pre_W: float):
+                 wind_ms: float, omega_setpoint_rads: float, P_baseline_pre_W: float,
+                 f0_hz: float = F0_HZ):
         self.tb = turbine
         self.sp = support
         self.rp = recovery
@@ -122,6 +124,7 @@ class FrequencyController:
         self.V = wind_ms
         self.omega_set = omega_setpoint_rads
         self.P_pre = P_baseline_pre_W
+        self.f0_hz = f0_hz            # nominal system frequency [Hz] (threads grid.f0_Hz)
         # Mode-machine memory:
         self.mode = MODE_IDLE
         self._t_support_start = None
@@ -162,7 +165,7 @@ class FrequencyController:
     def dP_target_and_dynamics(self, df_pu: float, rocof_meas_hz_s: float,
                                omega: float) -> tuple[float, float, float]:
         """Return (dP_target [pu], tau [s], rate_limit [pu/s]) for the active mode."""
-        f0 = 50.0
+        f0 = self.f0_hz
         if self.mode == MODE_SUPPORT:
             # Deadband on df (in Hz).
             df_hz = f0 * df_pu

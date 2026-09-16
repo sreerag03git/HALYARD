@@ -5,6 +5,8 @@ Kept separate from the tab renderers to avoid circular imports. All runs are det
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 import streamlit as st
 
 from analysis.comparison import run_comparison
@@ -13,9 +15,8 @@ from analysis.phase1 import Phase1Thresholds, run_phase1
 from analysis.sweep import run_sweep
 from analysis.case import run_case
 from physics.cable import build_quasistatic_family
-from physics.controller import EventSchedule, RecoveryParams, SupportParams
+from physics.controller import RecoveryParams
 from physics.fatigue import FatigueParams, SNCurve
-from physics.grid import GridModel
 from physics.simulation import SimConfig
 
 
@@ -27,20 +28,26 @@ def get_family():
 def make_config(p: dict, enable_support: bool = True,
                 recovery: RecoveryParams | None = None,
                 t_end: float | None = None) -> SimConfig:
-    grid = GridModel(H_sys_s=p["H_sys"], D_load=p["D_load"], S_base_MW=p["S_base"])
-    support = SupportParams(dP_max=p["dP_max"], H_wt_s=p["H_wt"], R_droop=p["R_droop"])
-    schedule = EventSchedule(support_window_s=p["support_window"])
-    rp = recovery or RecoveryParams(kind="shaped", tau_rec_s=p["tau_rec"],
-                                    rate_rec_pu_s=p["rate_rec"])
-    return SimConfig(wind_ms=p["wind"], Hs_m=p["Hs"], Tp_s=p["Tp"], wave_seed=p["seed"],
-                     t_end_s=t_end or p["t_end"], dt_s=0.025, p_load_pu=p["p_load"],
-                     wind_capacity_MW=p["wind_cap"], enable_support=enable_support,
-                     hydro_6dof=p.get("hydro_6dof", True),
-                     wave_heading_deg=p.get("wave_heading", 0.0),
-                     turbulence_TI=p.get("turbulence_TI", 0.0),
-                     blade_pitch=p.get("blade_pitch", True),
-                     dynamic_inflow=p.get("dynamic_inflow", True),
-                     grid=grid, support=support, recovery=rp, schedule=schedule)
+    # Start from the COMMITTED case so every non-sidebar field (reserve_pu, R_sys,
+    # T_gov_s, T_rocof_s, deadband_hz, rate_pu_s, tau_s, Kp_rec, dP_dip_max,
+    # shape_exponent, t_event_s, t_discard_s, beta_deg, dt_s) is reproduced, then
+    # override ONLY the sidebar-edited fields. Otherwise selecting a committed case
+    # in the sidebar silently falls back to dataclass defaults for the rest.
+    base = load_case(p.get("case_name", "default")).sim
+    grid = replace(base.grid, H_sys_s=p["H_sys"], D_load=p["D_load"], S_base_MW=p["S_base"])
+    support = replace(base.support, dP_max=p["dP_max"], H_wt_s=p["H_wt"], R_droop=p["R_droop"])
+    schedule = replace(base.schedule, support_window_s=p["support_window"])
+    rp = recovery or replace(base.recovery, kind="shaped", tau_rec_s=p["tau_rec"],
+                             rate_rec_pu_s=p["rate_rec"])
+    return replace(base, wind_ms=p["wind"], Hs_m=p["Hs"], Tp_s=p["Tp"], wave_seed=p["seed"],
+                   t_end_s=t_end or p["t_end"], p_load_pu=p["p_load"],
+                   wind_capacity_MW=p["wind_cap"], enable_support=enable_support,
+                   hydro_6dof=p.get("hydro_6dof", True),
+                   wave_heading_deg=p.get("wave_heading", 0.0),
+                   turbulence_TI=p.get("turbulence_TI", 0.0),
+                   blade_pitch=p.get("blade_pitch", True),
+                   dynamic_inflow=p.get("dynamic_inflow", True),
+                   grid=grid, support=support, recovery=rp, schedule=schedule)
 
 
 def make_fatigue(p: dict) -> FatigueParams:

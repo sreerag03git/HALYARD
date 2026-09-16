@@ -43,7 +43,13 @@ def wave_validation(Hs_list=(1.0, 2.5, 4.0), Tp=8.0, seed=1234) -> list:
 
 def cable_validation(cable: DynamicCable | None = None) -> dict:
     cable = cable or REFERENCE_CABLE
-    sh = solve_static_shape(cable)
+    sh0 = solve_static_shape(cable)
+    # The damped-Verlet solve can declare convergence ~1 deg before the true static fixed point
+    # (its residual measures per-step motion, not distance to equilibrium); the quasi-static
+    # fatigue family avoids this by warm-starting each shape. Re-solve warm-started from sh0 to
+    # settle to the SAME fixed point the fatigue engine uses, so the reported geometry
+    # (departure angle, length) is consistent with the numbers that drive the results.
+    sh = solve_static_shape(cable, r_init=np.column_stack([sh0.x, sh0.z]))
     # Length conservation (inextensibility).
     seg = np.sqrt(np.diff(sh.x) ** 2 + np.diff(sh.z) ** 2)
     solved_len = float(seg.sum())
@@ -71,8 +77,11 @@ def catenary_benchmark(cable: DynamicCable | None = None) -> dict:
     is a classic catenary. For span 2c and suspended length 2L, the catenary parameter a
     solves L = a sinh(c/a), and the mid-span sag is d = a(cosh(c/a) - 1). We solve the same
     case numerically and compare the sag — a geometric quantity that validates the solver's
-    force balance while being tolerant of the small bending stiffness (which only slightly
-    reduces the peak curvature, not the overall sag).
+    force balance. This artificial deep, seabed-free case is a slow-converging chain for the
+    red-black Gauss-Seidel length polish, so we raise ``gs_sweeps`` to drive the solved length
+    to the 150 m target (the discrepancy is residual length-constraint error, NOT bending: with
+    ``smooth_w=0`` the sag is unchanged; the production REFERENCE_CABLE converges fine because
+    seabed contact damps this slow mode).
     """
     import dataclasses
     from scipy.optimize import brentq
@@ -82,12 +91,16 @@ def catenary_benchmark(cable: DynamicCable | None = None) -> dict:
     bench = dataclasses.replace(bare, total_length_m=2 * half_len, water_depth_m=400.0,
                                 horizontal_layout_m=span)
     sh = solve_static_shape(bench, x_top=0.0, z_top=z0, anchor_x=span, anchor_z=z0,
-                            n_nodes=80, smooth_w=0.03)
+                            n_nodes=80, smooth_w=0.03, gs_sweeps=30000)
+    seg = np.hypot(np.diff(sh.x), np.diff(sh.z))
+    solved_len = float(seg.sum())
     sag_numeric = z0 - float(sh.z.min())
     c = span / 2.0
     a = brentq(lambda a_: a_ * np.sinh(c / a_) - half_len, 1.0, 1e5)
     sag_analytic = a * (np.cosh(c / a) - 1.0)
     return {"span_m": span, "length_m": 2 * half_len,
+            "solved_length_m": solved_len,
+            "length_error_%": 100 * (solved_len - 2 * half_len) / (2 * half_len),
             "catenary_a_m": a, "sag_analytic_m": sag_analytic,
             "sag_numeric_m": sag_numeric,
             "ratio": sag_numeric / sag_analytic if sag_analytic else np.nan}

@@ -59,7 +59,7 @@ def solve_static_shape(cable: DynamicCable, x_top: float | None = None,
                        z_top: float | None = None, anchor_x: float | None = None,
                        anchor_z: float | None = None, n_nodes: int = 80,
                        max_iter: int = 8000, constraint_sweeps: int = 20,
-                       smooth_w: float = 0.06,
+                       smooth_w: float = 0.06, gs_sweeps: int = 1500,
                        r_init: np.ndarray | None = None) -> StaticShape:
     """Solve the lazy-wave static shape by Position-Based Dynamics (inextensible cable).
 
@@ -164,7 +164,7 @@ def solve_static_shape(cable: DynamicCable, x_top: float | None = None,
     # (Jakobsen's rope method). Using updated positions within a sweep propagates the
     # correction along the chain in O(N) rather than Jacobi's O(N^2), so it converges the
     # inextensibility tightly in a few hundred sweeps (early stop on the worst segment).
-    r = _gauss_seidel_length(r, L0, w, top, anchor, depth, max_sweeps=1500, tol=5e-4)
+    r = _gauss_seidel_length(r, L0, w, top, anchor, depth, max_sweeps=gs_sweeps, tol=5e-4)
 
     # Straighten the seabed-laid tail: physically the slack cable lies straight on the flat
     # seabed from the touchdown to the anchor. The discrete solver otherwise folds the excess
@@ -377,10 +377,12 @@ def region_stress_timeseries(family: QuasiStaticFamily, region: str,
     platform rotation). ``daf`` amplifies the fluctuating part (§5.6 option a).
 
     Bending lever by region: the HANG-OFF carries the highest tension, so its armour tends
-    to STICK (no slip) — the physical reason hang-offs are fatigue-critical — and uses the
-    armour pitch radius (``hangoff_stick=True``, default). The lower-tension sag/hog/
-    touchdown SLIP and use the wire radius. Set ``hangoff_stick=False`` for the hang-off
-    slip lower bound (sensitivity study).
+    to STICK (partial no-slip) — the physical reason hang-offs are fatigue-critical. With
+    ``hangoff_stick=True`` (default) it uses the CALIBRATED partial-slip lever
+    ``hangoff_bend_radius_m`` (~3 mm), bracketed by the full-slip wire radius (2.5 mm) and
+    the no-slip armour pitch radius (90 mm) — see models.dynamic_cable and ASSUMPTIONS.md §3;
+    it is NOT the raw 90 mm pitch radius. The lower-tension sag/hog/touchdown SLIP and use the
+    wire radius. Set ``hangoff_stick=False`` for the hang-off full-slip lower bound.
     """
     c = family.cable
     surge = np.asarray(surge_t, float)

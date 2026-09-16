@@ -68,10 +68,12 @@ class WaveField:
         return float(np.sum(self.amp * np.cos(self.w * t - self.k * x + self.phase)))
 
     def horizontal_acceleration(self, t: float, x: float, z: float) -> float:
-        """du/dt at (x, z<=0) [m/s^2]. a_x = sum a w^2 e^{kz} sin(w t - k x + phi)."""
+        """du/dt at (x, z<=0) [m/s^2]. u = sum a w e^{kz} cos(theta) so
+        a_x = du/dt = -sum a w^2 e^{kz} sin(theta), theta = w t - k x + phi. (Matches the
+        vectorized kinematics_grid, which is the one actually used by the dynamic cable.)"""
         decay = np.exp(self.k * z)   # z<=0
-        return float(np.sum(self.amp * self.w ** 2 * decay
-                            * np.sin(self.w * t - self.k * x + self.phase)))
+        return float(-np.sum(self.amp * self.w ** 2 * decay
+                             * np.sin(self.w * t - self.k * x + self.phase)))
 
     def horizontal_velocity(self, t: float, x: float, z: float) -> float:
         decay = np.exp(self.k * z)
