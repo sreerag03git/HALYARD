@@ -28,25 +28,17 @@ def main():
     names = ["Overview", "Grid & control", "Platform & cable", "Phase-1 gate",
              "Recovery sweep", "Comparison", "Fatigue detail",
              "High-fidelity ingest", "Validation"]
-    t = st.tabs(names)
-    with t[0]:
-        tabs.tab_overview(p)
-    with t[1]:
-        tabs.tab_grid_control(p)
-    with t[2]:
-        tabs.tab_platform_cable(p)
-    with t[3]:
-        tabs.tab_phase1(p)
-    with t[4]:
-        tabs.tab_sweep(p)
-    with t[5]:
-        tabs.tab_comparison(p)
-    with t[6]:
-        tabs.tab_fatigue(p)
-    with t[7]:
-        tabs.tab_ingest(p)
-    with t[8]:
-        tabs.tab_validation(p)
+    renderers = [tabs.tab_overview, tabs.tab_grid_control, tabs.tab_platform_cable,
+                 tabs.tab_phase1, tabs.tab_sweep, tabs.tab_comparison, tabs.tab_fatigue,
+                 tabs.tab_ingest, tabs.tab_validation]
+    # Section navigation. Only the SELECTED section runs on each rerun. st.tabs would execute
+    # all nine section bodies on every rerun — including several coupled 6-DOF simulations
+    # (Grid, Platform, Phase-1, Comparison, Fatigue) and the BEM hydro build (Validation) — so
+    # the first cold load overwhelmed resource-limited hosting. This keeps first paint light.
+    section = st.radio("Section", names, horizontal=True, label_visibility="collapsed",
+                       key="_section")
+    st.markdown("")
+    renderers[names.index(section)](p)
 
 
 if __name__ == "__main__":
