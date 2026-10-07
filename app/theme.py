@@ -114,9 +114,10 @@ def inject_mobile_css():
 # overlay appended to document.body survives every rerun. It dismisses itself with a
 # self-contained CSS animation (plus a parent-window setTimeout safety net), so it does not
 # depend on the (short-lived) iframe surviving. A parent-window flag shows it once per page
-# load (every open/reload) but not on reruns. The content is typographic (no illustration): a
-# glossy node, the HALYARD wordmark, the project's one-line purpose, and two numbered points —
-# "the claim" / "the test", framing the Phase-1 honesty gate. Colours mirror the palette above.
+# load (every open/reload) but not on reruns. The content is typographic (no illustration): an
+# "H" monogram mark (two masts + a sagging halyard/cable line that draws itself in, with a light
+# pulse travelling it), the HALYARD wordmark, the project's one-line purpose, and two numbered
+# points — "the claim" / "the test", framing the Phase-1 honesty gate. Palette as above.
 #
 # NOTE: on Streamlit Community Cloud a cold/asleep container first shows Streamlit's OWN
 # "waking up" / loading screen, served before any app code runs — this overlay covers the
@@ -139,17 +140,23 @@ _SPLASH_HTML = """
       '@keyframes hlRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}' +
       '@keyframes hlLine{from{transform:scaleX(0)}to{transform:scaleX(1)}}' +
       '@keyframes hlSweep{0%{left:-35%}100%{left:100%}}' +
-      '@keyframes hlPulse{0%,100%{box-shadow:0 0 0 5px #FAFAF8,0 0 0 6px rgba(58,90,120,.28),0 8px 20px rgba(58,90,120,.20)}' +
-      '50%{box-shadow:0 0 0 5px #FAFAF8,0 0 0 6px rgba(58,90,120,.46),0 10px 26px rgba(58,90,120,.32)}}' +
+      '@keyframes hlDraw{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}' +
+      '@keyframes hlTravel{from{stroke-dashoffset:178}to{stroke-dashoffset:14}}' +
       '@keyframes hlOut{0%,85%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}}' +
       '#halyard-splash{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;' +
       'align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:#FAFAF8;' +
       "pointer-events:none;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;" +
       'animation:hlOut 3.8s ease-in forwards}' +
-      '#halyard-splash .hl-orb{width:44px;height:44px;border-radius:50%;opacity:0;' +
-      'background:radial-gradient(circle at 34% 30%,#86ADD6 0%,#3A5A78 56%,#2B4056 100%);' +
-      'box-shadow:0 0 0 5px #FAFAF8,0 0 0 6px rgba(58,90,120,.28),0 8px 20px rgba(58,90,120,.20);' +
-      'animation:hlRise .6s ease-out .05s forwards,hlPulse 2.6s ease-in-out .9s infinite}' +
+      '#halyard-splash .hl-mark{width:50px;height:50px;opacity:0;animation:hlRise .6s ease-out .05s forwards}' +
+      '#halyard-splash .hl-mark svg{display:block;width:50px;height:50px;overflow:visible}' +
+      '#halyard-splash .hl-mast,#halyard-splash .hl-rope{stroke:#3A5A78;fill:none;stroke-linecap:round;' +
+      'stroke-dasharray:100;stroke-dashoffset:0}' +
+      '#halyard-splash .hl-mast{stroke-width:5;animation:hlDraw .55s ease-out both}' +
+      '#halyard-splash .hl-mast-l{animation-delay:.12s}#halyard-splash .hl-mast-r{animation-delay:.24s}' +
+      '#halyard-splash .hl-rope{stroke-width:3.4;animation:hlDraw .5s ease-out .54s both}' +
+      '#halyard-splash .hl-rope-glow{stroke:#86ADD6;fill:none;stroke-width:3.4;stroke-linecap:round;' +
+      'stroke-dasharray:14 150;stroke-dashoffset:178;animation:hlTravel 1.7s linear 1.1s infinite}' +
+      '#halyard-splash .hl-node{fill:#3A5A78}' +
       '#halyard-splash .hl-w{opacity:0;margin-top:26px;font-weight:700;letter-spacing:.14em;font-size:1.7rem;' +
       'color:#1A1A1A;padding-left:.14em;animation:hlRise .6s ease-out .18s forwards}' +
       '#halyard-splash .hl-rule{width:46px;height:2px;margin-top:14px;border-radius:2px;background:#3A5A78;' +
@@ -171,13 +178,23 @@ _SPLASH_HTML = """
       'background:linear-gradient(90deg,rgba(58,90,120,0),#3A5A78 50%,rgba(58,90,120,0));' +
       'animation:hlSweep 1.25s cubic-bezier(.65,.05,.36,1) 1.25s infinite}' +
       '@media (prefers-reduced-motion:reduce){#halyard-splash *{opacity:1!important;transform:none!important;' +
-      'animation:none!important}#halyard-splash .hl-bar>i{left:0;width:100%}}';
+      'animation:none!important}#halyard-splash .hl-mast,#halyard-splash .hl-rope{stroke-dashoffset:0!important}' +
+      '#halyard-splash .hl-rope-glow{opacity:0!important}#halyard-splash .hl-bar>i{left:0;width:100%}}';
     doc.head.appendChild(css);
 
     var ov = doc.createElement('div');
     ov.id = 'halyard-splash';
     ov.innerHTML =
-      '<div class="hl-orb"></div>' +
+      '<div class="hl-mark" aria-hidden="true">' +
+        '<svg viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg" fill="none">' +
+          '<line class="hl-mast hl-mast-l" x1="14" y1="43" x2="14" y2="9" pathLength="100"/>' +
+          '<line class="hl-mast hl-mast-r" x1="38" y1="43" x2="38" y2="9" pathLength="100"/>' +
+          '<path class="hl-rope" d="M14 26 Q26 34 38 26" pathLength="100"/>' +
+          '<path class="hl-rope-glow" d="M14 26 Q26 34 38 26" pathLength="100"/>' +
+          '<circle class="hl-node" cx="14" cy="26" r="2.4"/>' +
+          '<circle class="hl-node" cx="38" cy="26" r="2.4"/>' +
+        '</svg>' +
+      '</div>' +
       '<div class="hl-w">HALYARD</div>' +
       '<div class="hl-rule"></div>' +
       '<div class="hl-s">A physics test bench for the cable-fatigue cost of grid-frequency ' +
