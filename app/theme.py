@@ -134,33 +134,41 @@ _SPLASH_HTML = """
     var css = doc.createElement('style');
     css.id = 'halyard-splash-css';
     css.textContent =
-      '@keyframes hlSpin{to{transform:rotate(360deg)}}' +
-      '@keyframes hlBar{0%{width:0%}82%{width:93%}100%{width:100%}}' +
-      '@keyframes hlOut{0%,80%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}}' +
+      '@keyframes hlRise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}' +
+      '@keyframes hlLine{from{transform:scaleX(0)}to{transform:scaleX(1)}}' +
+      '@keyframes hlSweep{0%{left:-40%}100%{left:100%}}' +
+      '@keyframes hlOut{0%,82%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}}' +
       '#halyard-splash{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;' +
       'align-items:center;justify-content:center;background:#FAFAF8;pointer-events:none;' +
       "font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;" +
-      'animation:hlOut 2.9s ease-in forwards;}' +
-      '#halyard-splash .hl-w{font-weight:700;letter-spacing:.3em;font-size:1.7rem;color:#1A1A1A;padding-left:.3em}' +
-      '#halyard-splash .hl-s{color:#8A8A86;font-size:.74rem;letter-spacing:.24em;text-transform:uppercase;margin-top:9px}' +
-      '#halyard-splash .hl-bar{width:220px;height:4px;background:#E6E6E1;border-radius:4px;overflow:hidden;margin-top:26px}' +
-      '#halyard-splash .hl-bar>i{display:block;height:100%;width:0;background:#3A5A78;border-radius:4px;animation:hlBar 2.5s ease-out forwards}' +
-      '#halyard-splash .hl-ring{margin-top:20px;width:26px;height:26px;border:2.5px solid #E6E6E1;' +
-      'border-top-color:#3A5A78;border-radius:50%;animation:hlSpin .8s linear infinite}' +
-      '@media (prefers-reduced-motion:reduce){#halyard-splash .hl-ring{animation:none}#halyard-splash .hl-bar>i{animation:none;width:100%}}';
+      'animation:hlOut 3s ease-in forwards}' +
+      '#halyard-splash .hl-w{opacity:0;font-weight:700;letter-spacing:.34em;font-size:1.75rem;color:#1A1A1A;' +
+      'padding-left:.34em;animation:hlRise .6s ease-out .05s forwards}' +
+      '#halyard-splash .hl-rule{width:44px;height:2px;margin-top:18px;border-radius:2px;background:#3A5A78;' +
+      'transform:scaleX(0);animation:hlLine .5s ease-out .36s forwards}' +
+      '#halyard-splash .hl-s{opacity:0;color:#8A8A86;font-size:.78rem;letter-spacing:.02em;margin-top:16px;' +
+      'max-width:290px;line-height:1.45;text-align:center;animation:hlRise .6s ease-out .52s forwards}' +
+      '#halyard-splash .hl-bar{opacity:0;position:relative;width:200px;height:3px;margin-top:30px;border-radius:3px;' +
+      'background:#E9E9E4;overflow:hidden;animation:hlRise .5s ease-out .72s forwards}' +
+      '#halyard-splash .hl-bar>i{position:absolute;top:0;left:-40%;height:100%;width:40%;border-radius:3px;' +
+      'background:linear-gradient(90deg,rgba(58,90,120,0),#3A5A78 50%,rgba(58,90,120,0));' +
+      'animation:hlSweep 1.15s cubic-bezier(.65,.05,.36,1) .9s infinite}' +
+      '@media (prefers-reduced-motion:reduce){#halyard-splash .hl-w,#halyard-splash .hl-rule,' +
+      '#halyard-splash .hl-s,#halyard-splash .hl-bar{opacity:1;transform:none;animation:none}' +
+      '#halyard-splash .hl-bar>i{left:0;width:100%;animation:none}}';
     doc.head.appendChild(css);
 
     var ov = doc.createElement('div');
     ov.id = 'halyard-splash';
     ov.innerHTML =
       '<div class="hl-w">HALYARD</div>' +
-      '<div class="hl-s">loading</div>' +
-      '<div class="hl-bar"><i></i></div>' +
-      '<div class="hl-ring"></div>';
+      '<div class="hl-rule"></div>' +
+      '<div class="hl-s">cable-fatigue cost of grid-frequency support</div>' +
+      '<div class="hl-bar"><i></i></div>';
     doc.body.appendChild(ov);
 
     // Safety net on the PARENT window, so removal survives this iframe being torn down.
-    win.setTimeout(function () { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }, 3200);
+    win.setTimeout(function () { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }, 3400);
   } catch (e) {}
 })();
 </script>
