@@ -25,15 +25,17 @@ def _n_html(at) -> int:
     return len(at.get("html"))
 
 
-def test_boot_splash_renders_once_per_session():
+def test_boot_splash_renders_without_error():
+    # The splash is a components.html iframe that injects the overlay into the parent document
+    # (so it survives Streamlit reruns and element-diffing). AppTest can't execute that JS;
+    # assert the app renders through boot_splash() cleanly on both the first run and a rerun,
+    # and that the page body still renders after it.
     at = _run()
     assert not at.exception
-    assert "_booted" in at.session_state and at.session_state["_booted"]
-    n1 = _n_html(at)          # inject_css + boot_splash overlay + splash_hide
-    at.run()                  # a plain rerun
+    assert any("HALYARD" in m.value for m in at.markdown)   # main ran past boot_splash()
+    at.run()                                                # a plain rerun must not error
     assert not at.exception
-    n2 = _n_html(at)          # inject_css only — both splash elements must be gone
-    assert n2 == n1 - 2, f"splash (overlay + hide) should emit only on first load (n1={n1}, n2={n2})"
+    assert any("HALYARD" in m.value for m in at.markdown)
 
 
 def test_global_css_injected_without_error():

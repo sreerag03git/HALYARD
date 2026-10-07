@@ -20,16 +20,12 @@ theme.inject_css()
 
 
 def main():
-    # Simple, clean loading page — shown once per session (covers the first load, never
-    # flickers on ordinary slider reruns). It HOLDS until the page is actually ready: the
-    # overlay is emitted here at full opacity, and splash_hide() is emitted at the very END
-    # of this run (below). Streamlit streams elements as they are produced, so the overlay
-    # stays up for the whole page build and then fades — no fixed timer that could reveal a
-    # half-rendered page.
-    first_load = not st.session_state.get("_booted")
-    if first_load:
-        st.html(theme.boot_splash())      # st.html = direct DOM (not an iframe), so it covers the viewport
-        st.session_state["_booted"] = True
+    # Simple, clean loading page (HALYARD name + loading bar + spinner). Rendered on every run
+    # (its own parent-window guard shows the overlay only once per page load). boot_splash()
+    # injects the overlay into the parent document via a component, so it survives Streamlit's
+    # reruns and fades itself out — see app/theme.py for why a plain st.html overlay gets
+    # deleted by element-diffing and never shows.
+    theme.boot_splash()
 
     p = sidebar_inputs()
     # Read the compact-layout toggle from session_state (set by its sidebar widget's key),
@@ -68,14 +64,8 @@ def main():
                            label_visibility="collapsed", key="_nav_radio")
     st.session_state["_nav"] = section
     st.markdown("")
-    try:
-        with st.spinner(f"Computing {section}…"):
-            renderers[names.index(section)](p)
-    finally:
-        # Dismiss the loading page now that everything above has rendered (hold-until-ready).
-        # In a finally so a section error can never leave the overlay stuck over the page.
-        if first_load:
-            st.html(theme.splash_hide())
+    with st.spinner(f"Computing {section}…"):
+        renderers[names.index(section)](p)
 
 
 if __name__ == "__main__":

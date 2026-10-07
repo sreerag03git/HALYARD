@@ -107,60 +107,73 @@ def inject_mobile_css():
     st.html(f"<style>{_RESPONSIVE_RULES}</style>")
 
 
-def boot_splash() -> str:
-    """A simple, clean loading page for the first paint of the session.
+# The loading page. Injected via a components.html iframe whose script writes the overlay
+# straight into the PARENT document (window.parent) — i.e. OUTSIDE Streamlit's managed element
+# tree. A plain st.html/st.markdown overlay is a tracked element: Streamlit's immediate
+# post-load rerun does not re-emit it, so element-diffing deletes it and it never shows. An
+# overlay appended to document.body survives every rerun. It dismisses itself with a
+# self-contained CSS animation (plus a parent-window setTimeout safety net), so it does not
+# depend on the (short-lived) iframe surviving. Shown once per browser session via
+# sessionStorage. Colours mirror the design palette above.
+#
+# NOTE: on Streamlit Community Cloud a cold/asleep container first shows Streamlit's OWN
+# "waking up" / loading screen, served before any app code runs — this overlay covers the
+# phase after that, while the script builds the page, and cannot replace that platform screen.
+_SPLASH_HTML = """
+<script>
+(function () {
+  try {
+    var win = window.parent, doc = win.document;
+    if (!doc || doc.getElementById('halyard-splash')) return;      // overlay already in the page
+    // Guard on a parent-window flag, NOT sessionStorage: it lives only as long as the page's
+    // JS context, so the splash shows once per page LOAD (every open/reload) but is skipped on
+    // Streamlit reruns (slider changes), which keep the same context.
+    if (win.__halyardSplashShown) return;
+    win.__halyardSplashShown = true;
 
-    Minimal by design: the HALYARD wordmark, a one-word 'loading' label, and a single quiet
-    spinner on a plain ground — no progress bar, no strapline. It HOLDS at full opacity (no
-    timer) and is dismissed only once the page has actually rendered, by splash_hide() emitted
-    at the very end of the script run; Streamlit streams elements as they are produced, so the
-    overlay stays up for the whole post-wake build and then fades. Injected with st.html (which
-    strips <script>), hence the pure-CSS, class-free fade driven from splash_hide(). Honours
-    prefers-reduced-motion.
+    var css = doc.createElement('style');
+    css.id = 'halyard-splash-css';
+    css.textContent =
+      '@keyframes hlSpin{to{transform:rotate(360deg)}}' +
+      '@keyframes hlBar{0%{width:0%}82%{width:93%}100%{width:100%}}' +
+      '@keyframes hlOut{0%,80%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}}' +
+      '#halyard-splash{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;' +
+      'align-items:center;justify-content:center;background:#FAFAF8;pointer-events:none;' +
+      "font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;" +
+      'animation:hlOut 2.9s ease-in forwards;}' +
+      '#halyard-splash .hl-w{font-weight:700;letter-spacing:.3em;font-size:1.7rem;color:#1A1A1A;padding-left:.3em}' +
+      '#halyard-splash .hl-s{color:#8A8A86;font-size:.74rem;letter-spacing:.24em;text-transform:uppercase;margin-top:9px}' +
+      '#halyard-splash .hl-bar{width:220px;height:4px;background:#E6E6E1;border-radius:4px;overflow:hidden;margin-top:26px}' +
+      '#halyard-splash .hl-bar>i{display:block;height:100%;width:0;background:#3A5A78;border-radius:4px;animation:hlBar 2.5s ease-out forwards}' +
+      '#halyard-splash .hl-ring{margin-top:20px;width:26px;height:26px;border:2.5px solid #E6E6E1;' +
+      'border-top-color:#3A5A78;border-radius:50%;animation:hlSpin .8s linear infinite}' +
+      '@media (prefers-reduced-motion:reduce){#halyard-splash .hl-ring{animation:none}#halyard-splash .hl-bar>i{animation:none;width:100%}}';
+    doc.head.appendChild(css);
 
-    NOTE: on Streamlit Community Cloud a cold container first shows Streamlit's own
-    'waking up' screen, which app code cannot replace; this overlay covers the phase after
-    that, while our script builds the page."""
-    return f"""<style>
-@keyframes halyardSpin {{ to {{ transform: rotate(360deg); }} }}
-#halyard-splash {{
-    position: fixed; inset: 0; z-index: 100000;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background: {PAPER};
-    transition: opacity 0.45s ease, visibility 0.45s ease;
-}}
-#halyard-splash.halyard-hide {{ opacity: 0; visibility: hidden; pointer-events: none; }}
-#halyard-splash .word {{
-    font-family: {FONT_STACK}; font-weight: 700; letter-spacing: 0.3em;
-    font-size: 1.55rem; color: {INK}; padding-left: 0.3em;
-}}
-#halyard-splash .sub {{
-    color: {GREY}; font-size: 0.74rem; margin-top: 9px; letter-spacing: 0.22em;
-    text-transform: uppercase;
-}}
-#halyard-splash .ring {{
-    margin-top: 28px; width: 32px; height: 32px;
-    border: 2.5px solid {GRID_LINE}; border-top-color: {ACCENT}; border-radius: 50%;
-    animation: halyardSpin 0.8s linear infinite;
-}}
-@media (prefers-reduced-motion: reduce) {{ #halyard-splash .ring {{ animation: none; }} }}
-</style>
-<div class="halyard-splash" id="halyard-splash">
-  <div class="word">HALYARD</div>
-  <div class="sub">loading</div>
-  <div class="ring"></div>
-</div>"""
+    var ov = doc.createElement('div');
+    ov.id = 'halyard-splash';
+    ov.innerHTML =
+      '<div class="hl-w">HALYARD</div>' +
+      '<div class="hl-s">loading</div>' +
+      '<div class="hl-bar"><i></i></div>' +
+      '<div class="hl-ring"></div>';
+    doc.body.appendChild(ov);
+
+    // Safety net on the PARENT window, so removal survives this iframe being torn down.
+    win.setTimeout(function () { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }, 3200);
+  } catch (e) {}
+})();
+</script>
+"""
 
 
-def splash_hide() -> str:
-    """Dismiss the boot_splash overlay. Emitted at the very END of the first script run, so
-    the overlay stays visible for the whole page build and then fades out cleanly. Adds the
-    .halyard-hide class via a CSS rule (st.html strips <script>, so no JS) — the transition is
-    defined on #halyard-splash, giving a 0.45s fade. A plain style match, not the class, so it
-    also works if class state is lost."""
-    return ("<style>#halyard-splash{opacity:0 !important;visibility:hidden !important;"
-            "pointer-events:none !important;transition:opacity 0.45s ease,visibility 0.45s ease;}"
-            "</style>")
+def boot_splash():
+    """Render the loading page (see _SPLASH_HTML). Call on EVERY run (unconditional): the
+    component iframe must be re-emitted each run so Streamlit's element-diffing never tears it
+    down before its script runs. The parent-window guard inside makes the overlay appear only
+    once per page load, so reruns don't re-show it."""
+    import streamlit.components.v1 as components
+    components.html(_SPLASH_HTML, height=0)
 
 
 def fidelity_tag(kind: str = "reduced") -> str:
