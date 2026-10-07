@@ -113,8 +113,10 @@ def inject_mobile_css():
 # post-load rerun does not re-emit it, so element-diffing deletes it and it never shows. An
 # overlay appended to document.body survives every rerun. It dismisses itself with a
 # self-contained CSS animation (plus a parent-window setTimeout safety net), so it does not
-# depend on the (short-lived) iframe surviving. Shown once per browser session via
-# sessionStorage. Colours mirror the design palette above.
+# depend on the (short-lived) iframe surviving. A parent-window flag shows it once per page
+# load (every open/reload) but not on reruns. The content is typographic (no illustration): a
+# glossy node, the HALYARD wordmark, the project's one-line purpose, and two numbered points —
+# "the claim" / "the test", framing the Phase-1 honesty gate. Colours mirror the palette above.
 #
 # NOTE: on Streamlit Community Cloud a cold/asleep container first shows Streamlit's OWN
 # "waking up" / loading screen, served before any app code runs — this overlay covers the
@@ -134,41 +136,65 @@ _SPLASH_HTML = """
     var css = doc.createElement('style');
     css.id = 'halyard-splash-css';
     css.textContent =
-      '@keyframes hlRise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}' +
+      '@keyframes hlRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}' +
       '@keyframes hlLine{from{transform:scaleX(0)}to{transform:scaleX(1)}}' +
-      '@keyframes hlSweep{0%{left:-40%}100%{left:100%}}' +
-      '@keyframes hlOut{0%,82%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}}' +
+      '@keyframes hlSweep{0%{left:-35%}100%{left:100%}}' +
+      '@keyframes hlPulse{0%,100%{box-shadow:0 0 0 5px #FAFAF8,0 0 0 6px rgba(58,90,120,.28),0 8px 20px rgba(58,90,120,.20)}' +
+      '50%{box-shadow:0 0 0 5px #FAFAF8,0 0 0 6px rgba(58,90,120,.46),0 10px 26px rgba(58,90,120,.32)}}' +
+      '@keyframes hlOut{0%,85%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}}' +
       '#halyard-splash{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;' +
-      'align-items:center;justify-content:center;background:#FAFAF8;pointer-events:none;' +
-      "font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;" +
-      'animation:hlOut 3s ease-in forwards}' +
-      '#halyard-splash .hl-w{opacity:0;font-weight:700;letter-spacing:.34em;font-size:1.75rem;color:#1A1A1A;' +
-      'padding-left:.34em;animation:hlRise .6s ease-out .05s forwards}' +
-      '#halyard-splash .hl-rule{width:44px;height:2px;margin-top:18px;border-radius:2px;background:#3A5A78;' +
-      'transform:scaleX(0);animation:hlLine .5s ease-out .36s forwards}' +
-      '#halyard-splash .hl-s{opacity:0;color:#8A8A86;font-size:.78rem;letter-spacing:.02em;margin-top:16px;' +
-      'max-width:290px;line-height:1.45;text-align:center;animation:hlRise .6s ease-out .52s forwards}' +
-      '#halyard-splash .hl-bar{opacity:0;position:relative;width:200px;height:3px;margin-top:30px;border-radius:3px;' +
-      'background:#E9E9E4;overflow:hidden;animation:hlRise .5s ease-out .72s forwards}' +
-      '#halyard-splash .hl-bar>i{position:absolute;top:0;left:-40%;height:100%;width:40%;border-radius:3px;' +
+      'align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:#FAFAF8;' +
+      "pointer-events:none;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;" +
+      'animation:hlOut 3.8s ease-in forwards}' +
+      '#halyard-splash .hl-orb{width:44px;height:44px;border-radius:50%;opacity:0;' +
+      'background:radial-gradient(circle at 34% 30%,#86ADD6 0%,#3A5A78 56%,#2B4056 100%);' +
+      'box-shadow:0 0 0 5px #FAFAF8,0 0 0 6px rgba(58,90,120,.28),0 8px 20px rgba(58,90,120,.20);' +
+      'animation:hlRise .6s ease-out .05s forwards,hlPulse 2.6s ease-in-out .9s infinite}' +
+      '#halyard-splash .hl-w{opacity:0;margin-top:26px;font-weight:700;letter-spacing:.14em;font-size:1.7rem;' +
+      'color:#1A1A1A;padding-left:.14em;animation:hlRise .6s ease-out .18s forwards}' +
+      '#halyard-splash .hl-rule{width:46px;height:2px;margin-top:14px;border-radius:2px;background:#3A5A78;' +
+      'transform:scaleX(0);animation:hlLine .5s ease-out .42s forwards}' +
+      '#halyard-splash .hl-s{opacity:0;max-width:440px;margin-top:16px;color:#55554F;font-size:.9rem;' +
+      'line-height:1.5;text-align:center;animation:hlRise .6s ease-out .54s forwards}' +
+      '#halyard-splash .hl-points{display:flex;flex-wrap:wrap;justify-content:center;gap:28px;' +
+      'margin-top:30px;max-width:540px}' +
+      '#halyard-splash .hl-pt{flex:1 1 210px;max-width:234px;min-width:186px;text-align:left;opacity:0;' +
+      'animation:hlRise .6s ease-out forwards}' +
+      '#halyard-splash .hl-pt.p1{animation-delay:.72s}#halyard-splash .hl-pt.p2{animation-delay:.9s}' +
+      '#halyard-splash .hl-n{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.72rem;' +
+      'letter-spacing:.14em;color:#3A5A78}' +
+      '#halyard-splash .hl-h{margin-top:7px;font-weight:600;font-size:.96rem;color:#1A1A1A}' +
+      '#halyard-splash .hl-b{margin-top:5px;color:#8A8A86;font-size:.8rem;line-height:1.5}' +
+      '#halyard-splash .hl-bar{opacity:0;position:relative;width:min(460px,78vw);height:3px;margin-top:34px;' +
+      'border-radius:3px;background:#E9E9E4;overflow:hidden;animation:hlRise .5s ease-out 1.05s forwards}' +
+      '#halyard-splash .hl-bar>i{position:absolute;top:0;left:-35%;height:100%;width:35%;border-radius:3px;' +
       'background:linear-gradient(90deg,rgba(58,90,120,0),#3A5A78 50%,rgba(58,90,120,0));' +
-      'animation:hlSweep 1.15s cubic-bezier(.65,.05,.36,1) .9s infinite}' +
-      '@media (prefers-reduced-motion:reduce){#halyard-splash .hl-w,#halyard-splash .hl-rule,' +
-      '#halyard-splash .hl-s,#halyard-splash .hl-bar{opacity:1;transform:none;animation:none}' +
-      '#halyard-splash .hl-bar>i{left:0;width:100%;animation:none}}';
+      'animation:hlSweep 1.25s cubic-bezier(.65,.05,.36,1) 1.25s infinite}' +
+      '@media (prefers-reduced-motion:reduce){#halyard-splash *{opacity:1!important;transform:none!important;' +
+      'animation:none!important}#halyard-splash .hl-bar>i{left:0;width:100%}}';
     doc.head.appendChild(css);
 
     var ov = doc.createElement('div');
     ov.id = 'halyard-splash';
     ov.innerHTML =
+      '<div class="hl-orb"></div>' +
       '<div class="hl-w">HALYARD</div>' +
       '<div class="hl-rule"></div>' +
-      '<div class="hl-s">cable-fatigue cost of grid-frequency support</div>' +
+      '<div class="hl-s">A physics test bench for the cable-fatigue cost of grid-frequency ' +
+      'support — on a floating offshore wind turbine.</div>' +
+      '<div class="hl-points">' +
+        '<div class="hl-pt p1"><div class="hl-n">01</div><div class="hl-h">The claim</div>' +
+        '<div class="hl-b">Grid-frequency support flexes the dynamic export cable and adds ' +
+        'measurable hang-off fatigue.</div></div>' +
+        '<div class="hl-pt p2"><div class="hl-n">02</div><div class="hl-h">The test</div>' +
+        '<div class="hl-b">Quantify that cost against a committed, pre-registered honesty ' +
+        'gate — or fail it plainly.</div></div>' +
+      '</div>' +
       '<div class="hl-bar"><i></i></div>';
     doc.body.appendChild(ov);
 
     // Safety net on the PARENT window, so removal survives this iframe being torn down.
-    win.setTimeout(function () { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }, 3400);
+    win.setTimeout(function () { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }, 4200);
   } catch (e) {}
 })();
 </script>
