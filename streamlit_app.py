@@ -20,10 +20,15 @@ theme.inject_css()
 
 
 def main():
-    # Neat, on-brand loading page — rendered once per session so it covers the cold-start
-    # boot (and the first heavy compute) but never flickers on ordinary slider reruns.
-    if not st.session_state.get("_booted"):
-        st.html(theme.boot_splash())      # st.html (direct DOM, not an iframe) so the overlay covers the viewport
+    # Simple, clean loading page — shown once per session (covers the first load, never
+    # flickers on ordinary slider reruns). It HOLDS until the page is actually ready: the
+    # overlay is emitted here at full opacity, and splash_hide() is emitted at the very END
+    # of this run (below). Streamlit streams elements as they are produced, so the overlay
+    # stays up for the whole page build and then fades — no fixed timer that could reveal a
+    # half-rendered page.
+    first_load = not st.session_state.get("_booted")
+    if first_load:
+        st.html(theme.boot_splash())      # st.html = direct DOM (not an iframe), so it covers the viewport
         st.session_state["_booted"] = True
 
     p = sidebar_inputs()
@@ -63,8 +68,14 @@ def main():
                            label_visibility="collapsed", key="_nav_radio")
     st.session_state["_nav"] = section
     st.markdown("")
-    with st.spinner(f"Computing {section}…"):
-        renderers[names.index(section)](p)
+    try:
+        with st.spinner(f"Computing {section}…"):
+            renderers[names.index(section)](p)
+    finally:
+        # Dismiss the loading page now that everything above has rendered (hold-until-ready).
+        # In a finally so a section error can never leave the overlay stuck over the page.
+        if first_load:
+            st.html(theme.splash_hide())
 
 
 if __name__ == "__main__":

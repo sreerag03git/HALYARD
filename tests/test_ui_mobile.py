@@ -16,7 +16,9 @@ from streamlit.testing.v1 import AppTest
 
 
 def _run():
-    return AppTest.from_file("streamlit_app.py", default_timeout=120).run()
+    # Generous timeout: these spin up the full app (family solve + a section render), which can
+    # exceed the 120s default on a slow/loaded CI machine and trip AppTest's wall-clock timeout.
+    return AppTest.from_file("streamlit_app.py", default_timeout=240).run()
 
 
 def _n_html(at) -> int:
@@ -27,11 +29,11 @@ def test_boot_splash_renders_once_per_session():
     at = _run()
     assert not at.exception
     assert "_booted" in at.session_state and at.session_state["_booted"]
-    n1 = _n_html(at)          # inject_css + boot_splash
+    n1 = _n_html(at)          # inject_css + boot_splash overlay + splash_hide
     at.run()                  # a plain rerun
     assert not at.exception
-    n2 = _n_html(at)          # inject_css only — splash must be gone
-    assert n2 == n1 - 1, f"splash should emit exactly once per session (n1={n1}, n2={n2})"
+    n2 = _n_html(at)          # inject_css only — both splash elements must be gone
+    assert n2 == n1 - 2, f"splash (overlay + hide) should emit only on first load (n1={n1}, n2={n2})"
 
 
 def test_global_css_injected_without_error():

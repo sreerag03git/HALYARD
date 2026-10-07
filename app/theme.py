@@ -108,66 +108,59 @@ def inject_mobile_css():
 
 
 def boot_splash() -> str:
-    """A neat, on-brand loading overlay for the first paint of the session.
+    """A simple, clean loading page for the first paint of the session.
 
-    Pure CSS: st.markdown strips <script>, so the overlay dismisses itself with a CSS
-    animation (fades out, then becomes hidden + non-interactive via fill-mode: forwards)
-    rather than any JavaScript. Rendered once per session (gated on session_state), so it
-    covers the cold-start boot but never flickers on ordinary reruns. Honours
-    prefers-reduced-motion. Colours/type come from the design system above."""
-    return f"""
-    <style>
-    @keyframes halyardSpin {{ to {{ transform: rotate(360deg); }} }}
-    @keyframes halyardLoad {{
-        0%   {{ transform: translateX(-130%); }}
-        60%  {{ transform: translateX(300%); }}
-        100% {{ transform: translateX(300%); }}
-    }}
-    @keyframes halyardSplashOut {{
-        0%, 60% {{ opacity: 1; visibility: visible; }}
-        100%    {{ opacity: 0; visibility: hidden; pointer-events: none; }}
-    }}
-    .halyard-splash {{
-        position: fixed; inset: 0; z-index: 100000;
-        display: flex; align-items: center; justify-content: center;
-        background: radial-gradient(1100px 560px at 50% 20%, #FFFFFF 0%, {PAPER} 58%, #F0F0EB 100%);
-        animation: halyardSplashOut 2.4s ease-in forwards;
-    }}
-    .halyard-splash .inner {{ text-align: center; transform: translateY(-4px); }}
-    .halyard-splash .ring {{
-        width: 52px; height: 52px; margin: 0 auto 22px;
-        border: 3px solid {GRID_LINE}; border-top-color: {ACCENT}; border-radius: 50%;
-        animation: halyardSpin 0.9s linear infinite;
-    }}
-    .halyard-splash .word {{
-        font-family: {FONT_STACK}; font-weight: 700; letter-spacing: 0.24em;
-        font-size: 1.7rem; color: {INK}; padding-left: 0.24em;
-    }}
-    .halyard-splash .sub {{ color: #55554F; font-size: 0.82rem; margin-top: 7px; letter-spacing: 0.02em; }}
-    .halyard-splash .bar {{
-        width: 188px; height: 3px; margin: 22px auto 0; border-radius: 3px;
-        background: {GRID_LINE}; overflow: hidden;
-    }}
-    .halyard-splash .bar > span {{
-        display: block; height: 100%; width: 38%; border-radius: 3px; background: {ACCENT};
-        animation: halyardLoad 1.4s ease-in-out infinite;
-    }}
-    .halyard-splash .tag {{ color: {GREY}; font-size: 0.72rem; margin-top: 15px; letter-spacing: 0.03em; }}
-    @media (prefers-reduced-motion: reduce) {{
-        .halyard-splash .ring, .halyard-splash .bar > span {{ animation: none; }}
-        .halyard-splash {{ animation-duration: 1.0s; }}
-    }}
-    </style>
-    <div class="halyard-splash">
-      <div class="inner">
-        <div class="ring"></div>
-        <div class="word">HALYARD</div>
-        <div class="sub">Cable-fatigue cost of grid-frequency support</div>
-        <div class="bar"><span></span></div>
-        <div class="tag">IEA-15&nbsp;MW &middot; VolturnUS-S &middot; initialising physics engine</div>
-      </div>
-    </div>
-    """
+    Minimal by design: the HALYARD wordmark, a one-word 'loading' label, and a single quiet
+    spinner on a plain ground — no progress bar, no strapline. It HOLDS at full opacity (no
+    timer) and is dismissed only once the page has actually rendered, by splash_hide() emitted
+    at the very end of the script run; Streamlit streams elements as they are produced, so the
+    overlay stays up for the whole post-wake build and then fades. Injected with st.html (which
+    strips <script>), hence the pure-CSS, class-free fade driven from splash_hide(). Honours
+    prefers-reduced-motion.
+
+    NOTE: on Streamlit Community Cloud a cold container first shows Streamlit's own
+    'waking up' screen, which app code cannot replace; this overlay covers the phase after
+    that, while our script builds the page."""
+    return f"""<style>
+@keyframes halyardSpin {{ to {{ transform: rotate(360deg); }} }}
+#halyard-splash {{
+    position: fixed; inset: 0; z-index: 100000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: {PAPER};
+    transition: opacity 0.45s ease, visibility 0.45s ease;
+}}
+#halyard-splash.halyard-hide {{ opacity: 0; visibility: hidden; pointer-events: none; }}
+#halyard-splash .word {{
+    font-family: {FONT_STACK}; font-weight: 700; letter-spacing: 0.3em;
+    font-size: 1.55rem; color: {INK}; padding-left: 0.3em;
+}}
+#halyard-splash .sub {{
+    color: {GREY}; font-size: 0.74rem; margin-top: 9px; letter-spacing: 0.22em;
+    text-transform: uppercase;
+}}
+#halyard-splash .ring {{
+    margin-top: 28px; width: 32px; height: 32px;
+    border: 2.5px solid {GRID_LINE}; border-top-color: {ACCENT}; border-radius: 50%;
+    animation: halyardSpin 0.8s linear infinite;
+}}
+@media (prefers-reduced-motion: reduce) {{ #halyard-splash .ring {{ animation: none; }} }}
+</style>
+<div class="halyard-splash" id="halyard-splash">
+  <div class="word">HALYARD</div>
+  <div class="sub">loading</div>
+  <div class="ring"></div>
+</div>"""
+
+
+def splash_hide() -> str:
+    """Dismiss the boot_splash overlay. Emitted at the very END of the first script run, so
+    the overlay stays visible for the whole page build and then fades out cleanly. Adds the
+    .halyard-hide class via a CSS rule (st.html strips <script>, so no JS) — the transition is
+    defined on #halyard-splash, giving a 0.45s fade. A plain style match, not the class, so it
+    also works if class state is lost."""
+    return ("<style>#halyard-splash{opacity:0 !important;visibility:hidden !important;"
+            "pointer-events:none !important;transition:opacity 0.45s ease,visibility 0.45s ease;}"
+            "</style>")
 
 
 def fidelity_tag(kind: str = "reduced") -> str:
