@@ -136,6 +136,13 @@ def cached_sweep(p: dict):
 def sidebar_inputs() -> dict:
     st.sidebar.markdown("### HALYARD")
     st.sidebar.caption("Cable-fatigue cost of grid-frequency support · IEA-15MW / VolturnUS-S")
+    # Compact/mobile layout preference. Stored under its own session_state key (read in
+    # streamlit_app.main) and deliberately NOT added to the params dict, so toggling the
+    # layout never changes the cache key of the physics runs.
+    st.sidebar.toggle(
+        "Compact / mobile layout", value=False, key="_mobile_view",
+        help="Stacks charts into a single column, turns the section nav into a dropdown, and "
+             "tightens spacing — for phones or a narrow window. Phones get this automatically.")
 
     cases = list_cases()
     default_idx = cases.index("default") if "default" in cases else 0

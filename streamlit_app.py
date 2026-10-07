@@ -12,12 +12,28 @@ from app import tabs, theme
 from app.runner import sidebar_inputs
 from app.theme import fidelity_tag
 
-st.set_page_config(page_title="HALYARD", layout="wide", initial_sidebar_state="expanded")
+# "auto" keeps the sidebar expanded on desktop but auto-collapses it on phones, so the
+# controls don't cover a small screen on first load (the biggest mobile win). The explicit
+# compact-layout toggle in the sidebar handles the rest of the responsive behaviour.
+st.set_page_config(page_title="HALYARD", layout="wide", initial_sidebar_state="auto")
 theme.inject_css()
 
 
 def main():
+    # Neat, on-brand loading page — rendered once per session so it covers the cold-start
+    # boot (and the first heavy compute) but never flickers on ordinary slider reruns.
+    if not st.session_state.get("_booted"):
+        st.html(theme.boot_splash())      # st.html (direct DOM, not an iframe) so the overlay covers the viewport
+        st.session_state["_booted"] = True
+
     p = sidebar_inputs()
+    # Read the compact-layout toggle from session_state (set by its sidebar widget's key),
+    # NOT from p — p is the cache key for every @st.cache_data sim, and a UI preference must
+    # not bust those caches or trigger a recompute when the layout is toggled.
+    mobile = bool(st.session_state.get("_mobile_view", False))
+    if mobile:
+        theme.inject_mobile_css()      # force the compact layout at any viewport width
+
     st.markdown("# HALYARD")
     st.markdown(
         fidelity_tag("reduced") +
@@ -35,10 +51,20 @@ def main():
     # all nine section bodies on every rerun — including several coupled 6-DOF simulations
     # (Grid, Platform, Phase-1, Comparison, Fatigue) and the BEM hydro build (Validation) — so
     # the first cold load overwhelmed resource-limited hosting. This keeps first paint light.
-    section = st.radio("Section", names, horizontal=True, label_visibility="collapsed",
-                       key="_section")
+    # In compact/mobile layout the nine-chip radio becomes a dropdown (far tidier on a phone).
+    # The last choice is remembered in _nav so switching widget type keeps you on the section.
+    prev = st.session_state.get("_nav", names[0])
+    idx = names.index(prev) if prev in names else 0
+    if mobile:
+        section = st.selectbox("Section", names, index=idx, label_visibility="collapsed",
+                               key="_nav_select")
+    else:
+        section = st.radio("Section", names, index=idx, horizontal=True,
+                           label_visibility="collapsed", key="_nav_radio")
+    st.session_state["_nav"] = section
     st.markdown("")
-    renderers[names.index(section)](p)
+    with st.spinner(f"Computing {section}…"):
+        renderers[names.index(section)](p)
 
 
 if __name__ == "__main__":

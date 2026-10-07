@@ -33,11 +33,34 @@ REGION_COLORS = {"hang_off": ACCENT, "sag": "#7FA8C9", "hog": "#C98F3A",
 FONT_STACK = ("Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, "
               "Helvetica, Arial, sans-serif")
 
+# Responsive rules shared by the (max-width) media query and the explicit "compact /
+# mobile layout" toggle. They stack every st.columns row, let the horizontal section
+# nav wrap, and tighten padding/metrics so the app is usable on a phone. Kept as one
+# block (no selectors specific to a single screen width) so both callers stay in sync.
+# Streamlit >=1.4 exposes columns as [data-testid="stColumn"]; the legacy "column"
+# testid is kept as a fallback so this is version-robust across the pinned 1.54 / local.
+_RESPONSIVE_RULES = """
+.block-container, [data-testid="stMainBlockContainer"] {
+    padding-left: 0.9rem !important; padding-right: 0.9rem !important;
+}
+h1 { font-size: 1.35rem !important; }
+h2 { font-size: 1.15rem !important; }
+h3 { font-size: 1.02rem !important; }
+[data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 0.5rem !important; }
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+[data-testid="stHorizontalBlock"] > [data-testid="column"] {
+    flex: 1 1 100% !important; width: 100% !important; min-width: 100% !important;
+}
+div[role="radiogroup"] { flex-wrap: wrap !important; gap: 0.25rem 0.7rem !important; }
+div[role="radiogroup"] label { font-size: 0.82rem !important; }
+div[data-testid="stMetric"] { padding: 8px 10px !important; }
+div[data-testid="stMetricValue"] { font-size: 1.15rem !important; }
+"""
+
 
 def inject_css():
     import streamlit as st
-    st.markdown(
-        f"""
+    base = f"""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         html, body, [class*="css"] {{ font-family: {FONT_STACK}; color: {INK}; }}
@@ -66,10 +89,85 @@ def inject_css():
             padding: 2px 0 2px 12px; margin: 4px 0 14px 0; }}
         .verdict-pass {{ color: {GOOD}; font-weight: 700; }}
         .verdict-fail {{ color: {WARN}; font-weight: 700; }}
+        /* Automatic phone / small-tablet layout (no device detection needed). */
+        @media (max-width: 820px) {{{_RESPONSIVE_RULES}}}
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
+        """
+    # st.html injects raw HTML straight into the DOM (NOT an iframe, unlike
+    # components.html), so global <style> rules apply. Crucially it bypasses the markdown
+    # parser, which otherwise re-enters markdown mode on the column-0 CSS lines inside the
+    # @media block and renders them as literal text.
+    st.html(base)
+
+
+def inject_mobile_css():
+    """Force the compact layout at ANY viewport width — driven by the sidebar toggle,
+    so a desktop user can opt into the phone layout (e.g. a narrow window or screenshot)."""
+    import streamlit as st
+    st.html(f"<style>{_RESPONSIVE_RULES}</style>")
+
+
+def boot_splash() -> str:
+    """A neat, on-brand loading overlay for the first paint of the session.
+
+    Pure CSS: st.markdown strips <script>, so the overlay dismisses itself with a CSS
+    animation (fades out, then becomes hidden + non-interactive via fill-mode: forwards)
+    rather than any JavaScript. Rendered once per session (gated on session_state), so it
+    covers the cold-start boot but never flickers on ordinary reruns. Honours
+    prefers-reduced-motion. Colours/type come from the design system above."""
+    return f"""
+    <style>
+    @keyframes halyardSpin {{ to {{ transform: rotate(360deg); }} }}
+    @keyframes halyardLoad {{
+        0%   {{ transform: translateX(-130%); }}
+        60%  {{ transform: translateX(300%); }}
+        100% {{ transform: translateX(300%); }}
+    }}
+    @keyframes halyardSplashOut {{
+        0%, 60% {{ opacity: 1; visibility: visible; }}
+        100%    {{ opacity: 0; visibility: hidden; pointer-events: none; }}
+    }}
+    .halyard-splash {{
+        position: fixed; inset: 0; z-index: 100000;
+        display: flex; align-items: center; justify-content: center;
+        background: radial-gradient(1100px 560px at 50% 20%, #FFFFFF 0%, {PAPER} 58%, #F0F0EB 100%);
+        animation: halyardSplashOut 2.4s ease-in forwards;
+    }}
+    .halyard-splash .inner {{ text-align: center; transform: translateY(-4px); }}
+    .halyard-splash .ring {{
+        width: 52px; height: 52px; margin: 0 auto 22px;
+        border: 3px solid {GRID_LINE}; border-top-color: {ACCENT}; border-radius: 50%;
+        animation: halyardSpin 0.9s linear infinite;
+    }}
+    .halyard-splash .word {{
+        font-family: {FONT_STACK}; font-weight: 700; letter-spacing: 0.24em;
+        font-size: 1.7rem; color: {INK}; padding-left: 0.24em;
+    }}
+    .halyard-splash .sub {{ color: #55554F; font-size: 0.82rem; margin-top: 7px; letter-spacing: 0.02em; }}
+    .halyard-splash .bar {{
+        width: 188px; height: 3px; margin: 22px auto 0; border-radius: 3px;
+        background: {GRID_LINE}; overflow: hidden;
+    }}
+    .halyard-splash .bar > span {{
+        display: block; height: 100%; width: 38%; border-radius: 3px; background: {ACCENT};
+        animation: halyardLoad 1.4s ease-in-out infinite;
+    }}
+    .halyard-splash .tag {{ color: {GREY}; font-size: 0.72rem; margin-top: 15px; letter-spacing: 0.03em; }}
+    @media (prefers-reduced-motion: reduce) {{
+        .halyard-splash .ring, .halyard-splash .bar > span {{ animation: none; }}
+        .halyard-splash {{ animation-duration: 1.0s; }}
+    }}
+    </style>
+    <div class="halyard-splash">
+      <div class="inner">
+        <div class="ring"></div>
+        <div class="word">HALYARD</div>
+        <div class="sub">Cable-fatigue cost of grid-frequency support</div>
+        <div class="bar"><span></span></div>
+        <div class="tag">IEA-15&nbsp;MW &middot; VolturnUS-S &middot; initialising physics engine</div>
+      </div>
+    </div>
+    """
 
 
 def fidelity_tag(kind: str = "reduced") -> str:
